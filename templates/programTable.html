@@ -1,0 +1,511 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>{$sitetitle}</title>
+<meta http-equiv="Content-Style-Type" content="text/css">
+
+{literal}
+<script type="text/javascript" src="js/jquery-1.3.2.min.js"></script>
+<script type="text/javascript" src="js/jquery-ui-1.7.2.custom.min.js"></script>
+<link rel="stylesheet" href="start/jquery-ui-1.7.2.custom.css" type="text/css">
+<script type="text/javascript" src="js/mdabasic.js"></script>
+<script type="text/javascript" src="js/genre.js"></script>
+<script type="text/javascript">
+	var PRG = {
+		tgl_button:function(p_id,my){
+			var r_id = parseInt($('#resid_' + p_id).children('.rev_id').html());
+			if( r_id > 0 ){
+				var autorec_f = $('#resid_' + p_id).children('.autorec').html();
+
+				$.get('cancelReservationForm.php', { reserve_id: r_id, autorec: autorec_f }, function(data) {
+					var recv = data.match(/error/i);
+					if( recv != null ){
+						alert(data);
+					}else{
+						var str = data;
+						str += '<div style="margin:2em 0 1em 0;text-align:center;"><a href="javascript:PRG.cancelrec(' + p_id + ')" class="ui-state-default ui-corner-all ui-dialog-buttonpane button">予約キャンセル</a></div>';
+						$('#floatBox4Dialog').html(str);
+						$('#floatBox4Dialog').submit(function(){my.value = "録画";});
+						$('#floatBox4Dialog').dialog('open', 'center');
+						my.value = "録画";
+					}
+				});
+			}else{
+				$.get(INISet.prgRecordURL, { program_id: p_id } ,function(data){
+					var recv = data.match(/error/i);
+					if( recv != null ){
+						alert(data);
+					}else{
+						var pt     = data.split( ':' );
+						var p_id   = parseInt(pt[0]);
+//						var tuner  = pt[1];
+						var r_id   = parseInt(pt[2]);
+//						var reload = parseInt(pt[3]);
+//						if( reload ){
+//							location.reload();
+//						}else{
+							if( p_id ) {
+								$('#resid_' + p_id).removeClass('freeze');
+								$('#resid_' + p_id).addClass('prg_rec_oth');
+								$('#resid_' + p_id).children('.rev_id').html(r_id);
+								my.value = "削除";
+							}
+//						}
+					}
+				});
+			}
+		},
+		cancelrec:function(p_id) {
+			var id_reserve_id = $('#id_reserve_id').val();
+			var tmp_disc = $('#id_autorec').attr('checked');
+			var id_autorec = tmp_disc ? 1 : 0;
+			var str = "<div>予約キャンセル中</div>";
+
+			$('#floatBox4Dialog').html(str);
+//			$('#floatBox4Dialog').dialog('open', 'center');
+			$.get('cancelReservation.php', { reserve_id: id_reserve_id,
+							autorec: id_autorec }, function(data) {
+				if(data.match(/^error/i)){
+					$('#floatBox4Dialog').dialog('close');
+					alert(data);
+				}else{
+					$('#resid_' + p_id).removeClass('prg_rec');
+					$('#resid_' + p_id).removeClass('prg_rec_oth');
+					$('#resid_' + p_id).children('.rev_id').html('0');
+					if( id_autorec ){
+						$('#resid_' + p_id).addClass('freeze');
+						$('#resid_' + p_id).children('.autorec').html('0');
+					}else
+						$('#resid_' + p_id).children('.autorec').html('1');
+					$('#floatBox4Dialog').dialog('close');
+				}
+			});
+		},
+		customform:function(pro_id,key_id) {
+			$('#floatBox4Dialog').dialog('close');
+			$.get('reservationform.php', { program_id: pro_id, keyword_id: key_id }, function(data) {
+				if(data.match(/^error/i)){
+					alert(data);
+				}
+				else {
+					var str = data;
+					str += '<div style="margin:2em 0 1em 0;text-align:center;"><a href="javascript:PRG.customrec()" class="ui-state-default ui-corner-all ui-dialog-buttonpane button">予約する</a></div>';
+					$('#floatBox4Dialog').html(str);
+					$('#floatBox4Dialog').dialog('open', 'center');
+				}
+			});
+		},
+		customrec:function() {
+			var id_syear = $('#id_syear').val();
+			var id_smonth = $('#id_smonth').val();
+			var id_sday = $('#id_sday').val();
+			var id_shour = $('#id_shour').val();
+			var id_smin = $('#id_smin').val();
+			var id_ssec = $('#id_ssec').val();
+			var id_eyear = $('#id_eyear').val();
+			var id_emonth = $('#id_emonth').val();
+			var id_eday = $('#id_eday').val();
+			var id_ehour = $('#id_ehour').val();
+			var id_emin = $('#id_emin').val();
+			var id_esec = $('#id_esec').val();
+			var id_channel_id = $('#id_channel_id').val();
+			var id_record_mode = $('#id_record_mode').val();
+			var id_title = $('#id_title').val();
+			var id_description = $('#id_description').val();
+			var id_category_id = $('#id_category_id ').val();
+			var id_program_id = $('#id_program_id').val();
+			var with_program_id = $('#id_program_id').attr('checked');
+			
+			if( ! with_program_id ) id_program_id = 0;
+			var tmp_disc = $('#id_discontinuity').attr('checked');
+			var id_discontinuity = tmp_disc ? 1 : 0;
+			var id_priority = $('#id_priority').val();
+			$.post('customReservation.php', { syear: id_syear,
+							  smonth: id_smonth,
+							  sday: id_sday,
+							  shour: id_shour,
+							  smin: id_smin,
+							  ssec: id_ssec,
+							  eyear: id_eyear,
+							  emonth: id_emonth,
+							  eday: id_eday,
+							  ehour: id_ehour,
+							  emin: id_emin,
+							  esec: id_esec,
+							  channel_id: id_channel_id,
+							  record_mode: id_record_mode,
+							  title: id_title,
+							  description: id_description,
+							  category_id: id_category_id,
+							  program_id: id_program_id,
+							  discontinuity: id_discontinuity,
+							  priority: id_priority }, function(data) {
+				var recv = data.match(/error/i);
+				if( recv != null ){
+					$('#floatBox4Dialog').dialog('close');
+					alert(data);
+				}
+				else {
+					var pt     = data.split( ':' );
+					var p_id   = parseInt(pt[0]);
+//					var tuner  = pt[1];
+					var r_id   = parseInt(pt[2]);
+//					var reload = parseInt(pt[3]);
+//					if( reload ){
+//						location.reload();
+//					}else{
+						if( p_id ) {
+							$('#resid_' + p_id).removeClass('freeze');
+							$('#resid_' + p_id).addClass('prg_rec_oth');
+							$('#resid_' + p_id).children('.rev_id').html(r_id);
+						}
+						$('#floatBox4Dialog').dialog('close');
+//					}
+				}
+			});
+		},
+		delkey:function(id){
+			$.get(INISet.prgDelKeyURL, { keyword_id: id } ,function(data){
+				if(data.match(/^error/i)){
+					alert(data);
+				}else{
+					var ref = document.referrer;
+					var key = 'keywordTable.php';
+
+					if( ref.indexOf(key) > -1 )
+						location.href = key;
+					else
+					if( ref.indexOf('programTable.php') > -1 )
+						location.href = key;
+					else
+						location.href = ref;
+//						history.back();
+				}
+			});
+		}
+	}
+	
+	$(document).ready(function () {
+		var DG = $('#floatBox4Dialog');
+		DG.dialog({title:'録画予約',width:600});
+		DG.dialog('close');
+	});
+
+	function change_subGenre(genre)
+	{
+		genre--;
+		len = document.myForm.sub_genre.options.length;
+		for (i=len-1; i>=0; i--)
+			document.myForm.sub_genre.options[i] = null;
+		document.myForm.sub_genre.options[0] = new Option( "すべて", genre!=14 ? 16 : 18 );
+		document.myForm.sub_genre.options[0].selected = true;
+		if(  genre>=0 && genre<16 ){
+			len = sub_genre_tbl[genre].length;
+			for( i=0,ii=1; i<len; i++ ){
+				if( sub_genre_tbl[genre][i] != "" )
+					document.myForm.sub_genre.options[ii++] = new Option( sub_genre_tbl[genre][i], i );
+			}
+			if( genre != 14 ){
+				document.myForm.sub_genre.options[ii] = new Option( "その他", 15 );
+			}else
+				return 18;
+		}
+		return 16;
+	}
+
+	function selected_subGenre(genre,sb_number)
+	{
+		if( genre != 15 ){
+			switch( sb_number ){
+				case 16:
+					document.myForm.sub_genre.options[0].selected = true;
+					break;
+				case 15:
+					document.myForm.sub_genre.options[document.myForm.sub_genre.options.length-1].selected = true;
+					break;
+				default:
+					document.myForm.sub_genre.options[sb_number+1].selected = true;
+					break;
+			}
+		}else{
+			switch( sb_number ){
+				case 18:
+					document.myForm.sub_genre.options[0].selected = true;
+					break;
+				default:
+					len = sub_genre_tbl[genre-1].length + 1;
+					for( i=1; i<len; i++ ){
+						if( document.myForm.sub_genre.options[i].value == sb_number ){
+							document.myForm.sub_genre.options[i].selected = true;
+							break;
+						}
+					}
+					break;
+			}
+		}
+	}
+
+	function popJump(selOBJ)
+	{
+		n = selOBJ.selectedIndex;
+		location.href = selOBJ.options[n].value;
+	}
+</script>
+<style type="text/css">
+<!--
+body {padding:4px;margin:0;font-size:10pt;}
+a {text-decoration:none;}
+input.example1 { width: 100%; }
+
+table#reservation_table {
+    border: 1px #BBB solid;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+table#reservation_table th {
+    padding: 5px;
+    border: #E3E3E3 solid;
+    border-width: 0 0 1px 1px;
+    background: #BBB;
+    font-weight: bold;
+    line-height: 120%;
+    text-align: center;
+}
+table#reservation_table td {
+    padding: 5px;
+    border: 1px #BBB solid;
+    border-width: 0 0 1px 1px;
+    text-align: center;
+}
+
+table#reservation_table tr.ctg_news, #category_select a.ctg_news {background-color: #FFFFD8;}
+table#reservation_table tr.ctg_etc, #category_select a.ctg_etc {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_information, #category_select a.ctg_information {background-color: #F2D8FF;}
+table#reservation_table tr.ctg_sports, #category_select a.ctg_sports {background-color: #D8FFFF;}
+table#reservation_table tr.ctg_cinema, #category_select a.ctg_cinema {background-color: #FFD8D8;}
+table#reservation_table tr.ctg_music, #category_select a.ctg_music {background-color: #D8D8FF;}
+table#reservation_table tr.ctg_drama, #category_select a.ctg_drama {background-color: #D8FFD8;}
+table#reservation_table tr.ctg_anime, #category_select a.ctg_anime {background-color: #FFE4C8;}
+table#reservation_table tr.ctg_variety, #category_select a.ctg_variety {background-color: #FFD2EB;}
+table#reservation_table tr.ctg_documentary, #category_select a.ctg_documentary {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_stage, #category_select a.ctg_stage {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_hobby, #category_select a.ctg_hobby {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_welfare, #category_select a.ctg_welfare {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_expand, #category_select a.ctg_expand {background-color: #FFFFFF;}
+table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #E4F4F4;}
+table#reservation_table tr.prg_rec  {background-color: #F55;color:#FEE;}
+table#reservation_table tr.prg_rec_oth  {background-color: #F88;}
+table#reservation_table tr.freeze {background-color: #CCCCCC;}
+
+table#reservation_table td.rev_id, table#reservation_table td.autorec {display: none;}
+
+#floatBox4Dialog .prg_title{font-size:120%;font-weight:bold;padding:0.4em 0;text-align:center;}
+#floatBox4Dialog .prg_rec_cfg{background:#EEE;padding:1em 2em;margin:0.4em 0;}
+#floatBox4Dialog .labelLeft {width:8em;float:left;text-align:right;}
+#floatBox4Dialog .button {padding:0.4em 1em;}
+
+
+
+-->
+</style>
+{/literal}
+
+</head>
+
+<body onLoad="change_subGenre({$k_category});selected_subGenre({$k_category},{$k_sub_genre})">
+
+<h2><form>
+{$sitetitle}
+<select onChange="popJump(this)">
+<option value="#">メニュー</option>
+{$link_add}
+{foreach from=$menu_list item=record}
+<option value="{$record.url}">{$record.name}</option>
+{/foreach}
+</select>
+</form></h2>
+
+<div>
+<fieldset>
+<legend><b>絞り込み</b></legend>
+<form name="myForm" method="post" action="programTable.php">
+<input type="hidden" name="do_search" value="1">
+<input type="hidden" name="keyword_id" value="{$keyword_id}">
+<input type="hidden" name="kw_enable" value="{$kw_enable}">
+<input type="hidden" name="sft_start" value="{$sft_start}">
+<input type="hidden" name="sft_end" value="{$sft_end}">
+<input type="hidden" name="discontinuity" value="{$discontinuity}">
+<input type="hidden" name="priority" value="{$priority}">
+<input type="hidden" name="overlap" value="{$overlap}">
+<input type="hidden" name="autorec_mode" value="{$autorec_mode}">
+<input type="hidden" name="directory" value="{$directory}">
+<input type="hidden" name="filename" value="{$filename}">
+<input type="hidden" name="rest_alert" value="{$rest_alert}">
+<input type="hidden" name="criterion_enab" value="{$criterion_enab}">
+<input type="hidden" name="smart_repeat" value="{$smart_repeat}">
+<b>検索語句:</b>(<input type="checkbox" name="use_regexp" value="1" {if $use_regexp}checked="checked"{/if}>正規表現 <input type="checkbox" name="ena_title" value="1" {if $ena_title}checked="checked"{/if}>タイトル <input type="checkbox" name="ena_desc" value="1" {if $ena_desc}checked="checked"{/if}>概要)<br>
+<input type="text" name="search" value="{$search|escape}" class="example1"><br>
+<b>種別:</b>(
+  {foreach from=$types item=type}
+    <input type="checkbox" name="type{$type.value}" value="1" {$type.checked}>{$type.name} 
+  {/foreach}
+)　<b>放送局:</b><select name="station">
+  {foreach from=$stations item=st}
+    <option value="{$st.id}" {$st.selected}>{$st.name}</option>
+  {/foreach}
+  </select>
+　<b>ジャンル:</b>(<input type="checkbox" name="first_genre" value="0" {if $first_genre == 0}checked="checked"{/if} >全保持)
+<select name="category_id" onChange="$k_sub_genre=change_subGenre(this.selectedIndex)">
+  {foreach from=$cats item=cat}
+  <option value="{$cat.id}" {$cat.selected}>{$cat.name}</option>
+  {/foreach}
+  </select>
+<b>サブジャンル</b><select name="sub_genre">
+  <option value={if $k_category != 15}"16"{else}"18"{/if}>すべて</option>
+  </select><br>
+
+<b>時間帯:</b><select name="prgtime">
+  {foreach from=$prgtimes item=prgt}
+  <option value="{$prgt.value}" {$prgt.selected}>{$prgt.name}</option>
+  {/foreach}
+  </select>
+から <select name="period">
+  {foreach from=$periods item=peri}
+  <option value="{$peri.value}" {$peri.selected}>{$peri.name}</option>
+  {/foreach}
+  </select>
+
+　<b>曜日:</b>(
+  {foreach from=$weekofdays item=week}
+    <input type="checkbox" name="week{$week.value}" value="1" {$week.checked}>{$week.name} 
+  {/foreach}
+)
+　<input type="submit" value="絞り込む">
+　({$programs|@count}件ヒット)
+</form>
+</fieldset>
+</div>
+
+
+{if count($programs)}
+<table id="reservation_table">
+ <tr>
+  <th>№</th>
+  <th>種別</th>
+  <th>放送局名</th>
+  <th>日付</th>
+  <th>開始-終了<br>(放送時間)</th>
+  <th>タイトル</th>
+  <th>概要</th>
+  <th>自動<br>ID</th>
+  <th style="margin: 0;padding: 0;">簡易<br>録画</th>
+  <th style="margin: 0;padding: 0;">詳細<br>録画</th>
+ </tr>
+
+{foreach from=$programs name=loop item=program}
+ <tr id="resid_{$program.id}" class="ctg_{$program.cat}{if $program.rec > 0}{if $program.key_id == $keyword_id} prg_rec{else} prg_rec_oth{/if}{/if}{if ! $program.autorec} freeze{/if}">
+  <td style="text-align: center;"><a {if $program.keyword != ""}href="{$program.keyword}"{/if}>{$smarty.foreach.loop.iteration}</a></td>
+  <td>{$program.type}</td>
+  <td>{$program.station_name}</td>
+  <td style="text-align: center;white-space: nowrap;"><a href="index.php?type={$program.type}&length=8&time={$program.prg_top}">{$program.date}</a></td>
+  <td style="text-align: center;">{$program.starttime}{$program.endtime}<br>　　({$program.duration})</td>
+  <td style="text-align: left;">{$program.title|escape}</td>
+  <td style="text-align: left;">{$program.description|escape}</td>
+  <td style="text-align: right;">{if $program.excl }*{/if}{if !$program.key_id }□{else}<a href="programTable.php?keyword_id={$program.key_id}">{$program.key_id}</a>{/if}</td>
+  <td style="margin: 0;padding: 0;" class="tgl_btn"><input type="button" value={if $program.rev_id}"削除"{else}"録画"{/if} onClick="javascript:PRG.tgl_button('{$program.id}',this)"></td>
+  <td style="margin: 0;padding: 0;"><input type="button" value="詳細" onClick="javascript:PRG.customform('{$program.id}','0')"><br><input type="button" value="補整" onClick="javascript:PRG.customform('{$program.id}','{if $keyword_id}{$keyword_id}{else}{$program.key_id}{/if}')"></td>
+  <td class="rev_id">{$program.rev_id}</td>
+  <td class="autorec">{$program.autorec}</td>
+ </tr>
+{/foreach}
+</table>
+{else}
+  該当する番組はありません
+{/if}
+{if count($programs) >= 300}<div>表示最大300件まで</div>{/if}
+{if $do_keyword}
+{if $k_category != 15 || $k_sub_genre>=0x3f }
+{if $do_keyword || (count($programs) < 300)}
+<div>
+<fieldset>
+<legend><b>検索条件</b></legend>
+  <b>語句:</b>{if $search == null}なし{else}{$search|escape}{/if}
+  <b>　正規表現:</b>{if $use_regexp}使う{else}使わない{/if}
+  <b>　検索対象:</b>{if $ena_title}タイトル{/if}{if $ena_desc}{if $ena_title}+{/if}概要{/if}
+  <br><b>種別:</b>{$type_names}
+  <b>　局:</b>{if $k_station == 0}すべて{else}{$k_station_name}{/if}
+  <b>　ジャンル({if $first_genre == 1}第一{else}全保持{/if}):</b>{if $k_category == 0}すべて{else}{$k_category_name}{/if}
+  <b>サブジャンル:</b><script type="text/javascript">sub_genre_view({$k_category}, {$k_sub_genre});</script>
+  <b>　曜日:</b>{if $weekofday == 0x7f}なし{else}{$wds_name}{/if}
+  <b>　時間帯:</b>{if $prgtime == 24}なし{else}{$prgtime}時から{$period}時間{/if}
+  <b>　件数:</b>{$programs|@count}<br>
+</fieldset>
+<form method="post" action="keywordTable.php">
+<fieldset>
+<legend><b>自動予約設定</b></legend>
+  <input type="hidden" name="add_keyword" value="{$do_keyword}">
+  <input type="hidden" name="keyword_id" value="{$keyword_id}">
+  <input type="hidden" name="k_use_regexp" value="{$use_regexp}">
+  <input type="hidden" name="k_ena_title" value="{$ena_title}">
+  <input type="hidden" name="k_ena_desc" value="{$ena_desc}">
+  <input type="hidden" name="k_search" value="{$search}">
+  <input type="hidden" name="k_typeGR" value="{$k_typeGR}">
+  <input type="hidden" name="k_typeBS" value="{$k_typeBS}">
+  <input type="hidden" name="k_typeCS" value="{$k_typeCS}">
+  <input type="hidden" name="k_typeEX" value="{$k_typeEX}">
+  <input type="hidden" name="k_category" value="{$k_category}">
+  <input type="hidden" name="k_station" value="{$k_station}">
+  <input type="hidden" name="k_weekofday" value="{$weekofday}">
+  <input type="hidden" name="k_prgtime" value="{$prgtime}">
+  <input type="hidden" name="k_period" value="{$period}">
+  <input type="hidden" name="k_sub_genre" value="{$k_sub_genre}">
+  <input type="hidden" name="k_first_genre" value="{$first_genre}">
+  <input type="hidden" name="k_criterion_dura" value="{$criterion_dura}">
+  <input type="checkbox" name="k_kw_enable" value="1" {if $kw_enable}checked="checked"{/if}><b>自動予約</b>　
+  <input type="checkbox" name="k_overlap" value="1" {if $overlap}checked="checked"{/if}><b>多重予約許可</b>　
+<!--  <input type="checkbox" name="k_smart_repeat" value="1" {if $smart_repeat}checked="checked"{/if} disabled><b>リピート予約</b>　-->
+  <input type="checkbox" name="k_rest_alert" value="1" {if $rest_alert}checked="checked"{/if}><b>無該当警告</b>　
+  <input type="checkbox" name="k_criterion_enab" value="1" {if $criterion_enab}checked="checked"{/if}><b>時間量変動警告</b>
+  <br>
+  <b>開始時刻シフト</b><input type="text" name="k_sft_start" value="{$sft_start}" size="8" class="required digits"><b>分　</b>
+  <b>終了時刻シフト</b><input type="text" name="k_sft_end" value="{$sft_end}" size="8" class="required digits"><b>分　</b>
+  <input type="checkbox" name="k_discontinuity" value="1" {if $discontinuity }checked="checked"{/if}><b>隣接禁止　</b>
+  <b>録画モード</b><select name="autorec_mode" >
+  {foreach from=$autorec_modes item=mode name=recmode }
+     <option value="{$smarty.foreach.recmode.index}" {$mode.selected} >{$mode.name}</option>
+  {/foreach}
+   </select>　
+  <b>優先度</b><input type="text" name="k_priority" value="{$priority}" size="2" class="required digits">
+  <br><b>保存ディレクトリー </b>{$spool|escape}<input type="text" name="k_directory" value="{$directory|escape}" size="80" class="required">
+  <br><b>録画ファイル名の形式 </b><input type="text" name="k_filename" value="{$filename|escape}" size="80" class="required">
+<table cellspacing="1" border="1" style="text-align: center;">
+  <tr><th>特殊文字列</th><td>%TITLE%</td><td>%ST%</td><td>%ET%</td><td>%TYPE%</td><td>%CH%</td><td>%DOW%</td><td>%DOWJ%</td><td>%YEAR%</td><td>%MONTH%</td><td>%DAY%</td><td>%HOUR%</td><td>%MIN%</td><td>%SEC%</td><td>%DURATION%</td></tr>
+  <tr><th>置換後の内容</th><td>番組タイトル</td><td>開始日時<br>（ex.200907201830)</td><td>終了日時<br>（同左）</td><td>GR/BS/CS</td><td>チャンネル番号</td><td>曜日<br>（Sun-Mon）</td><td>曜日<br>（日-土）</td><td>開始年</td><td>開始月</td><td>開始日</td><td>開始時</td><td>開始分</td><td>開始秒</td><td>録画時間<br>（秒）</td></tr>
+</table>
+</fieldset>
+　<input type="submit" value={if !$keyword_id }"この絞り込みを自動録画キーワードに登録"{else}"この設定で登録キーワードを更新"{/if}>
+{if $keyword_id}<b>／</b><input type="button" value="削除" onClick="javascript:PRG.delkey('{$keyword_id}')">{/if}
+  </form>
+</div>
+{/if}
+{/if}
+{/if}
+
+<div id="floatBox4Dialog">jQuery UI Dialog</div>
+
+{literal}
+<script type="text/javascript">
+var INISet = {
+	prgRecordURL : 'simpleReservation.php',			// 簡易予約
+	prgRecordPlusURL : 'recordp.php',		// 詳細予約
+	prgCancelURL : 'cancelReservation.php',		// 予約キャンセル
+	prgDelKeyURL : 'deleteKeyword.php'		// キーワード削除
+}
+</script>
+{/literal}
+</body>
+</html>

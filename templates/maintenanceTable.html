@@ -1,0 +1,201 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>メンテナンス</title>
+<meta http-equiv="Content-Style-Type" content="text/css">
+
+{literal}
+<script type="text/javascript" src="js/jquery-1.3.2.min.js"></script>
+<script type="text/javascript" src="js/jquery-ui-1.7.2.custom.min.js"></script>
+<link rel="stylesheet" href="start/jquery-ui-1.7.2.custom.css" type="text/css">
+<script type="text/javascript" src="js/mdabasic.js"></script>
+<script type="text/javascript">
+	var PRG = {
+		del_ch:function(del_id){
+			var chg_id = $('#extid_' + del_id).children('.rec_id').html();
+			$.get(INISet.prgDelChURL, { delete_id: del_id, change_id: chg_id } ,function(data){
+				if(data.match(/^error/i)){
+					alert(data);
+				}else{
+					$('#extid_' + del_id).hide();
+				}
+			});
+		},
+		chg_ch:function(del_id,index){
+			var chg_id = selOBJ.options[index].value;
+			$('#extid_' + del_id).children('.rec_id').html(chg_id);
+		}
+	}
+
+	function popJump(selOBJ)
+	{
+		n = selOBJ.selectedIndex;
+		location.href = selOBJ.options[n].value;
+	}
+</script>
+<style type="text/css">
+<!--
+body {padding:4px;margin:0;font-size:10pt;}
+a {text-decoration:none;}
+
+table#storage_table {
+    border: 1px #BBB solid;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+table#storage_table th {
+    padding: 5px;
+    border: #E3E3E3 solid;
+    border-width: 0 0 1px 1px;
+    background: #BBB;
+    font-weight: bold;
+    line-height: 120%;
+    text-align: center;
+}
+table#storage_table td {
+    padding: 5px;
+    border: 1px #BBB solid;
+    border-width: 0 0 1px 1px;
+    text-align: center;
+}
+
+table#extinct_ch_table {
+    border: 1px #BBB solid;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+table#extinct_ch_table th {
+    padding: 5px;
+    border: #E3E3E3 solid;
+    border-width: 0 0 1px 1px;
+    background: #BBB;
+    font-weight: bold;
+    line-height: 120%;
+    text-align: center;
+}
+table#extinct_ch_table td {
+    padding: 5px;
+    border: 1px #BBB solid;
+    border-width: 0 0 1px 1px;
+    text-align: center;
+}
+
+table#extinct_ch_table tr.freeze {background-color: #CCCCCC;}
+table#extinct_ch_table td.rec_id {display: none;}
+
+-->
+</style>
+{/literal}
+
+</head>
+
+<body>
+
+<h2><form>
+メンテナンス
+<select onChange="popJump(this)">
+<option value="#">メニュー</option>
+{$link_add}
+{foreach from=$menu_list item=record}
+<option value="{$record.url}">{$record.name}</option>
+{/foreach}
+ <option value="envSetting.php">環境設定</option>
+</select>
+</form></h2>
+
+<br>
+<div style="font-weight: bold;">録画ストレージ一覧</div>
+<div>背景色が赤のストレージは、書き込みが出来ない可能性が高いです。</div>
+<table id="storage_table">
+ <tr>
+  <th>DEVICE名</th>
+  <th>PATH</th>
+  <th>所有者</th>
+  <th>グループ</th>
+  <th>パーミッション</th>
+  <th>残容量</th>
+  <th>残時間({$ts_rate}MB/min)</th>
+ </tr>
+ <tr>
+  <td>全録画ストレージ</td>
+  <td style="text-align: left;">{$spool_disks[0].path}</td>
+  <td>---</td>
+  <td>---</td>
+  <td>-----</td>
+  <td style="text-align: right;">{$free_size}GB</td>
+  <td style="text-align: right;">{$free_time}</td>
+ </tr>
+{foreach from=$spool_disks item=disk}
+ <tr id="stid_{$disk.dev}" {if $disk.wrtbl=='0'}style="background-color: red"{/if}>
+  <td style="text-align: left;">{$disk.dname}</td>
+  <td style="text-align: left;">{$disk.path}</td>
+  <td>{$disk.owner}</td>
+  <td>{$disk.grupe}</td>
+  <td>{$disk.perm}</td>
+  <td style="text-align: right;">{$disk.size}GB</td>
+  <td style="text-align: right;">{$disk.time}</td>
+ </tr>
+{/foreach}
+</table>
+<br>
+
+{if count($ext_chs)}
+ <div style="font-weight: bold;">廃止チャンネル候補一覧 </div>
+ <div>削除についてはリスクを承知の上でお願いします。</div>
+ <div>背景がグレーになっているCHは、非表示に設定されたCHの可能性が高いです。</div>
+ <table id="extinct_ch_table">
+  <tr>
+   <th>ID</th>
+   <th>種別</th>
+   <th>サービスID</th>
+   <th>局名</th>
+   <th>物理CH</th>
+   <th>番組表表示</th>
+   <th>局変更先候補</th>
+   <th>削除</th>
+  </tr>
+  {foreach from=$ext_chs item=extinct}
+   <tr id="extid_{$extinct.id}" {if !$epg_get && $extinct.skip}class="freeze"{/if}>
+    <td>{$extinct.id}</td>
+    <td>{$extinct.type}</td>
+    <td>{$extinct.sid}</td>
+    <td>{$extinct.name}</td>
+    <td>{$extinct.channel}</td>
+    <td>{if $extinct.skip}×{else}○{/if}</td>
+    <td>
+     {if $extinct.rec > 0 }
+      <select name="cer_channel" onChange="PRG.chg_ch('{$extinct.id}',this.selectedIndex)">
+        <option value="0">変更なし</option>
+       {foreach from=$cer_chs item=certainty}
+        <option value="{$certainty.id}">{$certainty.channel_disc}:{$certainty.name}</option>
+       {/foreach}
+      </select>
+     {/if}
+    </td>
+    <td><input type="button" value="削除" onClick="javascript:PRG.del_ch('{$extinct.id}')"></td>
+    <td class="rec_id">0</td>
+   </tr>
+  {/foreach}
+ </table>
+{else}
+  廃止チャンネルはありません
+{/if}
+
+
+{literal}
+<script type="text/javascript">
+var INISet = {
+	prgRecordURL : 'simpleReservation.php',			// 簡易予約
+	prgRecordPlusURL : 'recordp.php',		// 詳細予約
+	prgCancelURL : 'cancelReservation.php',		// 予約キャンセル
+	prgDelChURL : 'deleteChannel.php'		// キーワード削除
+}
+</script>
+{/literal}
+</body>
+</html>

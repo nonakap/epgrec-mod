@@ -1,0 +1,95 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>{$sitetitle}</title>
+<meta http-equiv="Content-Style-Type" content="text/css">
+
+{literal}
+<script type="text/javascript">
+	function popJump(selOBJ)
+	{
+		n = selOBJ.selectedIndex;
+		location.href = selOBJ.options[n].value;
+	}
+</script>
+<style type="text/css">
+<!--
+body {padding:4px;margin:0;font-size:10pt;}
+a {text-decoration:none;}
+
+table#log_table {
+    border: 1px #BBB solid;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+table#log_table th {
+    padding: 5px;
+    border: #E3E3E3 solid;
+    border-width: 0 0 1px 1px;
+    background: #BBB;
+    font-weight: bold;
+    line-height: 120%;
+    text-align: center;
+}
+table#log_table td {
+    padding: 5px;
+    border: 1px #BBB solid;
+    border-width: 0 0 1px 1px;
+}
+
+table#log_table td.errorlevel0 {background-color: #FFFFFF;}
+table#log_table td.errorlevel1 {background-color: yellow;}
+table#log_table td.errorlevel2 {background-color: red;}
+table#log_table td.errorlevel3 {background-color: blue;}
+
+-->
+</style>
+{/literal}
+
+</head>
+
+<body>
+
+<h2>
+<form>
+{$sitetitle}
+<select onChange="popJump(this)">
+<option value="#">メニュー</option>
+{$link_add}
+{foreach from=$menu_list item=record}
+<option value="{$record.url}">{$record.name}</option>
+{/foreach}
+</select>
+</form>
+</h2>
+
+<div>
+<form name="myForm" method="post" action="logViewer.php">
+絞り込み：
+{foreach from=$log_levels name=loop item=level}
+	<input type="checkbox" name="level{$smarty.foreach.loop.iteration-1}" value="1"{if $level.view} checked="checked"{/if}>{$level.label} 
+{/foreach}
+<input type="submit" value="絞り込む">
+</form>
+</div>
+
+<table id="log_table">
+ <tr>
+  <th>レベル</th>
+  <th>日時</th>
+  <th>内容</th>
+ </tr>
+
+{foreach from=$logs item=log}
+ <tr>
+  <td align="center" class="errorlevel{$log.level}">{$log.label}</td>
+  <td align="center">{$log.logtime}</td>
+  <td>{$log.message}</td>
+ </tr>
+{/foreach}
+</body>
+</html>
