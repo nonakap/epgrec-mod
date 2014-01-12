@@ -255,7 +255,7 @@ class Keyword extends DBRecord {
 						if( (int)$pieces[0] ){
 							usleep( 1000 );		// 書き込みがDBに反映される時間を見極める。
 							// 最終回フラグ
-							if( (int)$pieces[4] && (int)$this->rest_alert!=3 ){
+							if( (int)$pieces[4] && (int)$this->rest_alert!=0 && (int)$this->rest_alert!=3 ){
 								$this->rest_alert = 3;
 								$this->update();
 							}

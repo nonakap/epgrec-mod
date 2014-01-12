@@ -115,6 +115,7 @@ class Reservation {
 			$extra_time      = (int)$settings->extra_time;
 			$rec_switch_time = (int)$settings->rec_switch_time;
 			$ed_tm_sft       = $former_time + $rec_switch_time;
+			$ed_tm_sft_chk   = $ed_tm_sft + $extra_time;
 			//チューナ仕様取得
 			if( $crec->type === 'GR' ){
 				$tuners   = (int)($settings->gr_tuners);
@@ -130,8 +131,8 @@ class Reservation {
 				$type_str = "(type = 'BS' OR type = 'CS')";
 				$smf_type = 'BS';
 			}
-			$stt_str  = toDatetime( $start_time-$ed_tm_sft );
-			$end_str  = toDatetime( $end_time+$ed_tm_sft );
+			$stt_str  = toDatetime( $start_time-$ed_tm_sft_chk );
+			$end_str  = toDatetime( $end_time+$ed_tm_sft_chk );
 			$battings = DBRecord::countRecords( RESERVE_TBL, "WHERE complete = '0' AND ".$type_str.
 															" AND starttime <= '".$end_str.
 															"' AND endtime >= '".$stt_str."'" );		//重複数取得
@@ -150,7 +151,7 @@ class Reservation {
 						$prev_trecs = DBRecord::createRecords( RESERVE_TBL, $sql_cmd.' ORDER BY starttime ASC' );
 						if( $prev_trecs == null )
 							break;
-						$stt_str = toDatetime( toTimestamp( $prev_trecs[0]->starttime )-$ed_tm_sft );
+						$stt_str = toDatetime( toTimestamp( $prev_trecs[0]->starttime )-$ed_tm_sft_chk );
 					}catch( Exception $e ){
 						break;
 					}
@@ -167,7 +168,7 @@ class Reservation {
 						$prev_trecs = DBRecord::createRecords( RESERVE_TBL, $sql_cmd.' ORDER BY endtime DESC' );
 						if( $prev_trecs == null )
 							break;
-						$end_str = toDatetime( toTimestamp( $prev_trecs[0]->endtime )+$ed_tm_sft );
+						$end_str = toDatetime( toTimestamp( $prev_trecs[0]->endtime )+$ed_tm_sft_chk );
 					}catch( Exception $e ){
 						break;
 					}
@@ -251,7 +252,7 @@ RETRY:;
 //						$bf_org_ed = $trecs[$t_tree[$t_cnt][$b_rev]]['end_time'];
 						$bf_ed     = $trecs[$t_tree[$t_cnt][$b_rev]]['end_time_sort'];
 						$variation = $af_st - $bf_ed;
-						if( $variation<0 || ( ( $settings->force_cont_rec!=1 || $trecs[$t_tree[$t_cnt][$b_rev]]['discontinuity']==1 ) && $variation<$ed_tm_sft ) ){
+						if( $variation<0 || ( ( $settings->force_cont_rec!=1 || $trecs[$t_tree[$t_cnt][$b_rev]]['discontinuity']==1 ) && $variation<$ed_tm_sft_chk ) ){
 							//完全重複 隣接禁止時もここ
 							$t_tree[$t_cnt+1][$n_1] = $t_tree[$t_cnt][$n_0];
 							$n_1++;
@@ -259,7 +260,7 @@ RETRY:;
 							array_splice( $t_tree[$t_cnt], $n_0, 1 );
 //file_put_contents( '/tmp/debug.txt', count($t_tree[$t_cnt])."\n", FILE_APPEND );
 						}else
-						if( $variation < $ed_tm_sft ){
+						if( $variation < $ed_tm_sft_chk ){
 							//隣接重複
 							// 重複数算出
 							$t_ovlp = 0;
@@ -274,7 +275,8 @@ RETRY:;
 							$s_ch = -1;
 							for( $br_lmt=$n_0; $br_lmt<count($t_tree[$t_cnt]); $br_lmt++ ){
 								//同じ開始時間の物をカウント
-								if( $bf_ed === $trecs[$t_tree[$t_cnt][$br_lmt]]['start_time'] ){
+								$variation = $trecs[$t_tree[$t_cnt][$br_lmt]]['start_time'] - $bf_ed;
+								if( 0<=$variation && $variation<$ed_tm_sft_chk ){
 									$t_ovlp++;
 									//同じCh
 									if( $trecs[$t_tree[$t_cnt][$b_rev]]['channel_id'] === $trecs[$t_tree[$t_cnt][$br_lmt]]['channel_id'] )
@@ -493,7 +495,7 @@ LOG_THROW:;
 							$next_start_time = $trecs[$t_tree[$t_cnt][$n_0+1]]['start_time'];
 						if( $prev_id === 0 ){
 							//新規予約
-							if( $n_0<$n_lmt-1 && $prev_end_time+$ed_tm_sft>$next_start_time ){
+							if( $n_0<$n_lmt-1 && $prev_end_time+$ed_tm_sft_chk>$next_start_time ){
 								$prev_end_time -= $ed_tm_sft;
 								$prev_shortened = TRUE;
 							}
@@ -528,7 +530,7 @@ LOG_THROW:;
 								$shortened_clear = FALSE;
 								if( $n_0 < $n_lmt-1 ){
 									if( !$prev_shortened ){
-										if( $prev_end_time > $next_start_time-$ed_tm_sft ){
+										if( $prev_end_time > $next_start_time-$ed_tm_sft_chk ){
 											//隣接解消再予約
 											$prev_end_time -= $ed_tm_sft;
 											$prev_shortened = TRUE;
@@ -560,7 +562,7 @@ LOG_THROW:;
 											continue;
 										}
 									}else{
-										if( $prev_end_time+$ed_tm_sft*2 <= $next_start_time ){
+										if( $prev_end_time+$ed_tm_sft+$ed_tm_sft_chk <= $next_start_time ){
 											//終了時間短縮解消再予約
 											$prev_end_time += $ed_tm_sft;
 											$prev_shortened = FALSE;
@@ -633,7 +635,7 @@ LOG_THROW:;
 									|| ( $smf_type==='EX' && $EX_TUNERS_CHARA[$prev_tuner]['cntrl'] ) ) ){
 								//録画中
 								if( !$prev_shortened ){
-									if( $prev_end_time > $next_start_time-$ed_tm_sft ){
+									if( $prev_end_time > $next_start_time-$ed_tm_sft_chk ){
 										//録画時間短縮指示
 										$ps = search_reccmd( $prev_id );
 										if( $ps !== FALSE ){
@@ -649,7 +651,7 @@ LOG_THROW:;
 										}
 									}
 								}else{
-									if( $prev_end_time+$ed_tm_sft*2 <= $next_start_time ){
+									if( $prev_end_time+$ed_tm_sft+$ed_tm_sft_chk <= $next_start_time ){
 										//録画時間延伸指示
 										$ps = search_reccmd( $prev_id );
 										if( $ps !== FALSE ){
