@@ -11,7 +11,7 @@ echo "SID  : $SID"
 if [ ${TUNER} -lt ${TUNER_UNIT} ]; then
 	RECORDER=/usr/local/bin/recpt1
 
-	if [ ${OUTPUT} = '-' ]; then
+	if [ "${OUTPUT}" = '-' ]; then
 		# リアルタイム視聴
 		VIEW_CMD=$RECORDER' --b25 --strip --http 8888 --sid all'
 		$VIEW_CMD
@@ -35,7 +35,7 @@ if [ ${TUNER} -lt ${TUNER_UNIT} ]; then
 			# 目的のSIDのみ残す SD用
 			$RECORDER --b25 --strip --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null
 #		elif [ ${MODE} = 3 ]; then
-#			TEMP_TS=${OUTPUT}.tmp.ts
+#			TEMP_TS="${OUTPUT}.tmp.ts"
 # 	 		$RECORDER --b25 --strip --sid $SID $CHANNEL $DURATION "$TEMP_TS" >/dev/null
 		else
 			$RECORDER --b25 --strip --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null
@@ -46,7 +46,7 @@ else
 	if [ ${TYPE} = 'GR' ]; then
 		RECORDER=/usr/local/bin/recfsusb2n
 
-		if [ ${OUTPUT} = '-' ]; then
+		if [ "${OUTPUT}" = '-' ]; then
 			# リアルタイム視聴 PT1以外
 			# パイプでVLCの配信機能を使用する場合
 #			VIEW_CMD=$RECORDER" --b25 --sid $SID $CHANNEL - -"
@@ -74,7 +74,7 @@ else
 				# 目的のSIDのみ残す SD用
 				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null || sleep 10
 #			elif [ ${MODE} = 3 ]; then
-#				TEMP_TS=${OUTPUT}.tmp.ts
+#				TEMP_TS="${OUTPUT}.tmp.ts"
 #				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$TEMP_TS" >/dev/null || sleep 10
 			else
 				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null || sleep 10
@@ -84,7 +84,7 @@ else
 		RECORDER=/usr/local/bin/recfrio
 		B25=/usr/local/bin/b25_bcas
 
-		if [ ${OUTPUT} = '-' ]; then
+		if [ "${OUTPUT}" = '-' ]; then
 			# リアルタイム視聴 PT1以外
 			# パイプでVLCの配信機能を使用する場合
 #			VIEW_CMD=$RECORDER" --b25 --sid $SID $CHANNEL - -"
@@ -112,7 +112,7 @@ else
 				# 目的のSIDのみ残す SD用
 				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null
 #			elif [ ${MODE} = 3 ]; then
-#				TEMP_TS=${OUTPUT}.tmp.ts
+#				TEMP_TS="${OUTPUT}.tmp.ts"
 #				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$TEMP_TS" >/dev/null
 			else
 				$RECORDER --b25 --sid $SID $CHANNEL $DURATION "$OUTPUT" >/dev/null
