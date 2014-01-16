@@ -76,18 +76,56 @@ $RECORD_MODE = array(
 	*/
 );
 
+//
+// チューナー設定
+// settings/tuner.conf.php があればそれを優先する
+//
+if( file_exists( INSTALL_PATH."/settings/tuner.conf.php" ) ) {
+	include_once( INSTALL_PATH."/settings/tuner.conf.php" );
+} else {
+	define( "TUNER_UNIT1", 0 );							// 第一チューナーの各放送波の論理チューナ数(地上波･衛星波で共用 ex.PT1が1枚なら2)
+	define( "TUNER_UNIT2", 0 );							// 上記以外の論理チューナ数(未使用)
 
-define( "TUNER_UNIT1", 0 );							// 第一チューナーの各放送波の論理チューナ数(地上波･衛星波で共用 ex.PT1が1枚なら2)
-define( "TUNER_UNIT2", 0 );							// 上記以外の論理チューナ数(未使用)
+	// PT1キャラデバ版ドライバー使用時に変更すること
+	define( "USE_RECPT1", FALSE );						// recpt1使用時はTRUEにすること
+	define( "RECPT1_EPG_PATCH", FALSE );				// recpt1 EPG単独出力パッチ使用時はTRUE
 
-// PT1キャラデバ版ドライバー使用時に変更すること
-define( "USE_RECPT1", FALSE );						// recpt1使用時はTRUEにすること
-define( "RECPT1_EPG_PATCH", FALSE );				// recpt1 EPG単独出力パッチ使用時はTRUE
+	// PTシリーズ以外のチューナーの個別設定(チューナー数に応じて増やすこと)
+	$OTHER_TUNERS_CHARA = array(
+		// 地デジ
+		'GR' => array(
+			0 => array(
+				'epgTs' => FALSE,			// EPG用TS出力パッチ使用時はTRUE
+				'cntrl' => FALSE,			// recpt1ctl対応パッチ使用時はTRUE
+				'httpS' => FALSE,			// httpサーバー機能対応時はTRUE
+			),
+			1 => array(
+				'epgTs' => FALSE,
+				'cntrl' => FALSE,
+				'httpS' => FALSE,
+			),
+		),
+		// 衛星(BS/CS)
+		'BS' => array(
+			0 => array(
+				'epgTs' => FALSE,
+				'cntrl' => FALSE,
+				'httpS' => FALSE,
+			),
+			1 => array(
+				'epgTs' => FALSE,
+				'cntrl' => FALSE,
+				'httpS' => FALSE,
+			),
+		)
+	);
 
-// PTシリーズ以外のチューナーの個別設定(チューナー数に応じて増やすこと)
-$OTHER_TUNERS_CHARA = array(
-	// 地デジ
-	'GR' => array(
+	// スカパー！プレミアム（対応中、ただしハードが無いのでデバッグ不可能）
+	define( 'EXTRA_TUNERS', 0 );					// チューナー数
+	define( 'EXTRA_NAME', 'スカパー！プレミアム' );	// 放送波名
+	define( 'EX_EPG_TIME', 240 );					// EPG受信時間
+	define( 'EX_EPG_CHANNEL',  'CS15_0'  );			// EPG受信Ch
+	$EX_TUNERS_CHARA = array(
 		0 => array(
 			'epgTs' => FALSE,			// EPG用TS出力パッチ使用時はTRUE
 			'cntrl' => FALSE,			// recpt1ctl対応パッチ使用時はTRUE
@@ -98,39 +136,9 @@ $OTHER_TUNERS_CHARA = array(
 			'cntrl' => FALSE,
 			'httpS' => FALSE,
 		),
-	),
-	// 衛星(BS/CS)
-	'BS' => array(
-		0 => array(
-			'epgTs' => FALSE,
-			'cntrl' => FALSE,
-			'httpS' => FALSE,
-		),
-		1 => array(
-			'epgTs' => FALSE,
-			'cntrl' => FALSE,
-			'httpS' => FALSE,
-		),
-	)
-);
+	);
+}
 
-// スカパー！プレミアム（対応中、ただしハードが無いのでデバッグ不可能）
-define( 'EXTRA_TUNERS', 0 );					// チューナー数
-define( 'EXTRA_NAME', 'スカパー！プレミアム' );	// 放送波名
-define( 'EX_EPG_TIME', 240 );					// EPG受信時間
-define( 'EX_EPG_CHANNEL',  'CS15_0'  );			// EPG受信Ch
-$EX_TUNERS_CHARA = array(
-	0 => array(
-		'epgTs' => FALSE,			// EPG用TS出力パッチ使用時はTRUE
-		'cntrl' => FALSE,			// recpt1ctl対応パッチ使用時はTRUE
-		'httpS' => FALSE,			// httpサーバー機能対応時はTRUE
-	),
-	1 => array(
-		'epgTs' => FALSE,
-		'cntrl' => FALSE,
-		'httpS' => FALSE,
-	),
-);
 
 // リアルタイム視聴
 define( "REALVIEW_HTTP", FALSE );					// リアルタイム視聴を有効にするときはtrueに
