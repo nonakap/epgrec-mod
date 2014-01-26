@@ -158,16 +158,16 @@ class Settings extends SimpleXMLElement {
 					}
 				}
 				// 不法侵入による攻撃
-				$alert_msg = '不法侵入者による攻撃を受けました。['.$_SERVER['REMOTE_HOST'].'('.$_SERVER['REMOTE_ADDR'].')] '.$key.' => '.$trim_post;
+				$alert_msg = '不法侵入者による攻撃を受けました。IP::['.$_SERVER['REMOTE_ADDR'].'('.$_SERVER['REMOTE_HOST'].')] '.$key.' => '.$trim_post;
 				reclog( $alert_msg, EPGREC_WARN );
 				file_put_contents( INSTALL_PATH.$this->spool.'/alert.log', date("Y-m-d H:i:s").' '.$alert_msg."\n", FILE_APPEND );
 				syslog( LOG_WARNING, $alert_msg );
 				return;
 			}
 		}
-		if( $_SERVER['REMOTE_ADDR'] !== '127.0.0.1' && strncmp( $_SERVER['REMOTE_ADDR'], '192.168.',  8 ) ){
-			if( $_SERVER['HTTPS'] !== 'on' ){
-				$alert_msg = 'グローバルIPからの設定変更です。['.$_SERVER['REMOTE_HOST'].'('.$_SERVER['REMOTE_ADDR'].')] ';
+		if( $NET_AREA === 'G' ){
+			if( !$AUTHORIZED ){			// $_SERVER['HTTPS']!=='on'
+				$alert_msg = 'グローバルIPからの設定変更です。IP::['.$_SERVER['REMOTE_ADDR'].'('.$_SERVER['REMOTE_HOST'].')] ';
 				reclog( $alert_msg, EPGREC_WARN );
 				file_put_contents( INSTALL_PATH.$this->spool.'/alert.log', date("Y-m-d H:i:s").' '.$alert_msg."\n", FILE_APPEND );
 				syslog( LOG_WARNING, $alert_msg );
@@ -187,4 +187,5 @@ class Settings extends SimpleXMLElement {
 		$this->asXML( self::conf_xml() );
 	}
 }
+if( !isset($NET_AREA) || !isset($AUTHORIZED) )exit;
 ?>

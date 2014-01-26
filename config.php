@@ -145,6 +145,7 @@ define( "EXTINCT_CH_AUTO_DELETE", FALSE );			// 廃止チャンネルを自動�
 define( 'CRITERION_CHECK', FALSE );					// 収録時間変動
 define( 'REST_ALERT', FALSE );						// 番組がヒットしない場合
 
+// セキュリティ関連
 define( "SETTING_CHANGE_GIP", FALSE );				// グローバルIPからの設定変更を許可する場合はTRUE
 //////////////////////////////////////////////////////////////////////////////
 // 以降の変数・定数はほとんどの場合、変更する必要はありません
@@ -226,27 +227,48 @@ if( check_ch_map( 'gr_channel.php', isset( $GR_CHANNEL_MAP ) ) ){
 	include_once( INSTALL_PATH.'/settings/gr_channel.php' );
 }
 
-/* 
-// おそらく誰も使っていないと思われるので無効化 セキュリティ強化の一環
-//
-// settings/site_conf.phpがあればそれを優先する
-//
-if( file_exists( INSTALL_PATH."/settings/site_conf.php" ) ) {
-	unset($GR_CHANNEL_MAP);
-	unset($RECORD_MODE);
-	include_once( INSTALL_PATH."/settings/site_conf.php" );
-}
-
-// Deprecated
-// カスタマイズした設定をロードし、デフォルト設定をオーバライドする
-// unsetはカスタム設定ファイルの責任で行う
-if( file_exists( INSTALL_PATH."/settings/config_custom.php" ) ) {
-	include_once( INSTALL_PATH."/settings/config_custom.php" );
-}
-*/
-
 
 // セキュリティ強化
+if( isset($_SERVER['REMOTE_ADDR']) ){
+	if( $_SERVER['REMOTE_ADDR'] === '127.0.0.1' ){
+		$NET_AREA = 'H';			// local host
+	}else
+	if( strncmp( $_SERVER['REMOTE_ADDR'], '192.168.', 8 ) === 0 ){
+		$NET_AREA = 'C';			// class C
+	}else
+	if( strncmp($_SERVER['REMOTE_ADDR'], '10.', 3 ) === 0 ){
+		$NET_AREA = 'A';			// class A
+	}else{
+		$adrs = explode( '.', $_SERVER['REMOTE_ADDR'] );
+		if( $adrs[0]==='172' && ((int)$adrs[1]&0xf0)==0x10 )
+			$NET_AREA = 'B';			// class B
+		else
+			$NET_AREA = 'G';			// blobal
+	}
+}else
+	$NET_AREA = FALSE;
+$AUTHORIZED = isset($_SERVER['REMOTE_USER']);
+
+// グローバルIPからのアクセスにHTTP認証を強要
+if( $NET_AREA==='G' && !$AUTHORIZED && ( !defined('HTTP_AUTH_GIP') || HTTP_AUTH_GIP ) ){
+/*
+	echo "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n";
+	echo "<html><head>\n";
+	echo "<title>404 Not Found</title>\n";
+	echo "</head><body>\n";
+	echo "<h1>Not Found</h1>\n";
+	echo "<p>The requested URL ".$_SERVER['PHP_SELF']." was not found on this server.</p>\n";
+	echo "<hr>\n";
+	echo "<address>".$_SERVER['SERVER_SOFTWARE']." Server at ".$_SERVER['SERVER_ADDR']." Port 80</address>;\n";
+	echo "</body></html>\n";
+*/
+	$alert_msg = 'グローバルIPからのアクセスにHTTP認証が設定されていません。IP::['.$_SERVER['REMOTE_ADDR'].'('.$_SERVER['REMOTE_HOST'].')] SCRIPT::['.$_SERVER['PHP_SELF'].']';
+	include_once( INSTALL_PATH . '/DBRecord.class.php' );
+	include_once( INSTALL_PATH . '/recLog.inc.php' );
+	reclog( $alert_msg, EPGREC_WARN );
+	exit;
+}
+
 // チャンネルMAPファイルを操作された場合(削除･不正コード挿入など)を想定
 // epgrecUNA以外からの操作が可能なため対応
 function check_ch_map( $ch_file, $gr_safe=FALSE )
