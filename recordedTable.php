@@ -84,10 +84,20 @@ try{
 		$end_time   = toTimestamp($r->endtime);
 		$arr['starttime'] = date( 'Y/m/d(', $start_time ).$week_tb[date( 'w', $start_time )].')<br>'.date( 'H:i:s', $start_time );
 		$arr['duration']  = date( 'H:i:s', $end_time-$start_time-9*60*60 );
-		$arr['asf'] = ''.$settings->install_url.'/viewer.php?reserve_id='.$r->id;
+		$moviepath = INSTALL_PATH.$settings->spool.'/'.$r->path;
+		if ( is_readable( $moviepath ) ){
+			$arr['asf'] = ''.$settings->install_url.'/viewer.php?reserve_id='.$r->id;
+		}else{
+			$arr['asf'] = '';
+		}
 		$arr['title'] = htmlspecialchars($r->title,ENT_QUOTES);
 		$arr['description'] = htmlspecialchars($r->description,ENT_QUOTES);
-		$arr['thumb'] = "<img src=\"".$settings->install_url.$settings->thumbs.'/'.rawurlencode(array_pop(explode( '/', $r->path ))).".jpg\" />";
+		$thumbpath = INSTALL_PATH.$settings->thumbs.'/'.array_pop(explode( '/', $r->path )).".jpg";
+		if ( is_readable( $thumbpath ) ){
+			$arr['thumb'] = "<img src=\"".$settings->install_url.$settings->thumbs.'/'.rawurlencode(array_pop(explode( '/', $r->path ))).".jpg\" />";
+		}else{
+			$arr['thumb'] = "-";
+		}
 		$arr['cat'] = $cat->name_en;
 		$arr['mode'] = $RECORD_MODE[$r->mode]['name'];
 		$arr['keyword'] = putProgramHtml( $arr['title'], '*', 0, $r->category_id, 16 );

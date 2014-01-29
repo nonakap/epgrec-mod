@@ -207,7 +207,7 @@ table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: 
   <td>{$rec.station_name}</td>
   <td>{$rec.mode}</td>
   {if $use_thumbs == 1}<td><a href="{$rec.asf}">{$rec.thumb}</a></td>{/if}
-  <td style="text-align: left;"><a href="{$rec.asf}" id="tid_{$rec.id}">{$rec.title}</a></td>
+  <td style="text-align: left;"><a {if $rec.asf != ""}href="{$rec.asf}"{/if} id="tid_{$rec.id}">{$rec.title}</a></td>
   <td style="text-align: left;"><a id="did_{$rec.id}">{$rec.description}</a></td>
   <td style="text-align: right;">{if !$rec.key_id }□{else}<a href="programTable.php?keyword_id={$rec.key_id}">{$rec.key_id}</a>{/if}</td>
   <td><input type="button" value="変更" onClick="javascript:PRG.editdialog('{$rec.id}')"></td>
