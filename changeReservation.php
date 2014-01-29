@@ -3,6 +3,7 @@ include_once('config.php');
 include_once(INSTALL_PATH."/DBRecord.class.php");
 include_once(INSTALL_PATH."/reclib.php");
 include_once(INSTALL_PATH."/Settings.class.php");
+include_once(INSTALL_PATH."/Reservation.class.php");
 
 $settings = Settings::factory();
 
@@ -26,8 +27,12 @@ try {
 	$rec = new DBRecord(RESERVE_TBL, "id", $reserve_id );
 	
 	if( isset( $_POST['title'] ) ) {
+		$old_title = $rec->title;
 		$rec->title = trim( $_POST['title'] );
 		$rec->dirty = 1;
+		if ( $old_title !== $rec->title ){
+			Reservation::update_title( $rec, $old_title, $rec->title );
+		}
 		if( ($dbh !== false) && ($rec->complete == 1) ) {
 			$title = trim( mysql_real_escape_string($_POST['title']));
 			$title .= "(".date("Y/m/d", toTimestamp($rec->starttime)).")";

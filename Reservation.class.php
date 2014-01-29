@@ -9,7 +9,7 @@ include_once( INSTALL_PATH . '/recLog.inc.php' );
 // 予約クラス
 
 class Reservation {
-	
+
 	public static function simple( $program_id , $autorec = 0, $mode = 0, $discontinuity=0 ) {
 		$rval = 0;
 		try {
@@ -34,7 +34,7 @@ class Reservation {
 		return $rval.( strpos( $prec->description, '【終】' )!==FALSE ? ':1' : ':0' );
 	}
 
-	
+
 	public static function custom(
 		$starttime,				// 開始時間Datetime型
 		$endtime,				// 終了時間Datetime型
@@ -704,8 +704,566 @@ LOG_THROW:;
 	}
 	// custom 終了
 
+
+	public static function update_title(
+		$rec,					// 既存レコード
+		$old_title,				// 変更前タイトル
+		$title					// タイトル
+	) {
+		if( $rec->complete == 0 )
+			return self::at_update_title( $rec, $old_title, $rec->title );
+		return self::rename_filename( $rec, $old_title, $rec->title );
+	}
+
+
+	private static function at_update_title(
+		$rec,					// 既存レコード
+		$old_title,				// 変更前タイトル
+		$title					// タイトル
+	) {
+		$settings = Settings::factory();
+
+		$start_time = toTimestamp( $rec->starttime );
+		$end_time = toTimestamp( $rec->endtime );
+
+		$now_time = time();
+		$rec_start  = $start_time - $settings->former_time;
+		$epg_time = array( 'GR' => FIRST_REC, 'BS' => 180, 'CS' => 120, 'EX' => 180 );
+		if( $rec_start - $epg_time[$rec->type] <= $now_time ){
+			// 即時録画となる時間を過ぎている場合には予約更新はしない
+			return false;
+		}
+		$padding_tm = $start_time % 60 ? PADDING_TIME + $start_time % 60 : PADDING_TIME;
+		$at_start   = ( $start_time - $padding_tm <= $now_time ) ? $now_time : $start_time - $padding_tm;
+		$sleep_time = $rec_start - $at_start;
+
+		// 録画設定
+		$env = array( 'CHANNEL'    => null,
+		              'DURATION'   => null,
+		              'OUTPUT'     => null,
+		              'TYPE'       => null,
+		              'TUNER'      => null,
+		              'MODE'       => null,
+		              'TUNER_UNIT' => null,
+		              'THUMB'      => null,
+		              'FORMER'     => null,
+		              'FFMPEG'     => null,
+		              'SID'        => null,
+		              'EID'        => null,
+		              'RESOLUTION' => null,
+		              'ASPECT'     => null,
+		              'AUDIO_TYPE' => null,
+		              'BILINGUAL'  => null,
+		);
+
+		// 現在の録画設定取得
+		$process = popen( escapeshellcmd( $settings->at.' -c '.$rec->job ) , 'r' );
+		if( !is_resource( $process ) ) {
+			reclog( 'at -c '.$rec->job.' の実行に失敗した模様', EPGREC_ERROR);
+			throw new Exception('at -c 実行エラー');
+		}
+		$buffer = stream_get_contents( $process );
+		if( $buffer === false ) {
+			reclog( 'at -c '.$rec->job.' の実行に失敗した模様', EPGREC_ERROR);
+			pclose( $process );
+			throw new Exception('at -c 実行エラー');
+		}
+		pclose( $process );
+		foreach( $env as $name=>$value ) {
+			if ( preg_match( '/'.$name.'=(.*); export '.$name.'\n*/', $buffer, $matches ) !== 1 )
+				throw new Exception('"'.$name.'"行が見つかりません');
+			$env[$name] = $matches[1];
+		}
+
+		// ファイル名更新
+		$crec_     = new DBRecord( CHANNEL_TBL, 'id', $rec->channel_id );
+		$filenames = self::create_filenames( $start_time, $end_time, $rec->type, $crec_->sid, $rec->channel, $crec_->name, $title, $rec->category_id, $rec->mode, $rec->autorec, $env['DURATION'] );
+		$add_dir   = $filenames[0];
+		$filename  = $filenames[1];
+		$thumbname = $filenames[2];
+		$newoutput = INSTALL_PATH.$settings->spool.'/'.$add_dir.$filename;
+		$newthumb = INSTALL_PATH.$settings->thumbs.'/'.$thumbname;
+		if ( $env['OUTPUT'] === $newoutput && $env['THUMB'] === $newthumb ){
+			// ファイル名に変更が無い場合は予約更新しない
+			return false;
+		}
+		$env['OUTPUT'] = $newoutput;
+		$env['THUMB'] = $newthumb;
+
+		// 録画予約追加
+		$oldjob = $rec->job;
+		$job = self::do_reserve( $rec, $env, $at_start, $sleep_time );
+		$rec->path = $add_dir.$filename;
+		$rec->job = $job;
+		$rec->dirty = 1;
+		$rec->update();
+
+		// 古い録画予約を削除
+		while( true ){
+			$ret_cd = system( $settings->atrm . " " . $oldjob, $var_ret );
+			if( $ret_cd !== FALSE && $var_ret == 0 ){
+				reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のタイトルを『'.$rec->title.'』に変更しました。' );
+				break;
+			}
+			$rarr       = explode( "\n", str_replace( "\t", ' ', shell_exec( $settings->at.'q' ) ) );
+			$search_job = $oldjob.' ';
+			$search_own = posix_getlogin();
+			foreach( $rarr as $str_var ){
+				if( strncmp( $str_var, $search_job, strlen( $search_job ) ) == 0 ){
+					if( strpos( $str_var, $search_own ) !== FALSE )
+						continue 2;
+					else{
+						reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のタイトルを『'.$rec->title.'』に変更しましたが、古い AT-JOB:'.$oldjob.'の削除に失敗しました。 ('.$search_own.'以外でJOBが登録されています)', EPGREC_ERROR );
+						break 2;
+					}
+				}
+			}
+			reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のタイトルを『'.$rec->title.'』に変更しましたが、古い AT-JOB:'.$oldjob.'の削除に失敗しました。 (JOBが有りませんでした)' );
+			break;
+		}
+		return true;
+	}
+
+
+	private static function rename_filename(
+		$rec,					// 既存レコード
+		$old_title,				// 変更前タイトル
+		$title					// タイトル
+	) {
+		$settings = Settings::factory();
+
+		$start_time = toTimestamp( $rec->starttime );
+		$end_time = toTimestamp( $rec->endtime );
+		$rec_start = $start_time - $settings->former_time;
+		$duration = $end_time - $rec_start;
+
+		// 新ファイル名
+		$crec_     = new DBRecord( CHANNEL_TBL, 'id', $rec->channel_id );
+		$filenames = self::create_filenames( $start_time, $end_time, $rec->type, $crec_->sid, $rec->channel, $crec_->name, $title, $rec->category_id, $rec->mode, $rec->autorec, $duration );
+		$add_dir   = $filenames[0];
+		$filename  = $filenames[1];
+		$thumbname = $filenames[2];
+		$newoutput = INSTALL_PATH.$settings->spool.'/'.$add_dir.$filename;
+		$newthumb = INSTALL_PATH.$settings->thumbs.'/'.$thumbname;
+
+		// 旧動画ファイル名
+		$oldoutput = INSTALL_PATH.$settings->spool.'/'.$rec->path;
+		if ( !is_readable ( $oldoutput ) ){
+			$oldoutput = null;
+			$tmp_replace_title = '##'.md5( $newoutput ).'##';
+			$wfilename = preg_replace( '/'.$title.'/', $tmp_replace_title, $newoutput, 1 );
+			$wfilename = preg_replace( '/[[*?]/', '\\\\$0', $wfilename );
+			$wfilename = preg_replace( '/'.$tmp_replace_title.'/', '*', $wfilename, 1 );
+			$files = glob( $wfilename, GLOB_NOSORT );
+			if ( $files !== false && count( $files ) == 1 && strlen( $files[0] ) > 0 && is_readable( $files[0] ) ){
+				$oldoutput = $files[0];
+			}
+		}
+
+		// 旧サムネイルファイル名
+		$oldthumb = INSTALL_PATH.$settings->thumbs.'/'.array_pop(explode('/', $rec->path)).'.jpg';
+		if ( !is_readable ( $oldthumb ) ){
+			$oldthumb = null;
+			$tmp_replace_title = '##'.md5( $newthumb ).'##';
+			$wthumbname = preg_replace( '/'.$title.'/', $tmp_replace_title, $newthumb, 1 );
+			$wthumbname = preg_replace( '/[[*?]/', '\\\\$0', $wthumbname );
+			$wthumbname = preg_replace( '/'.$tmp_replace_title.'/', '*', $wthumbname, 1 );
+			$files = glob( $wthumbname, GLOB_NOSORT );
+			if ( $files !== false && count( $files ) == 1 && strlen( $files[0] ) > 0 && is_readable( $files[0] ) ){
+				$oldthumb = $files[0];
+			}
+		}
+
+		//
+		// ファイル移動
+		//
+		if ( !isset( $oldoutput ) ){
+			// 変更前の動画ファイルが見つからなかった場合は何もしない
+			return false;
+		}
+		if ( $newoutput === $oldoutput && $newthumb === $oldthumb ) {
+			// 同じ名前の場合は何もしない
+			return false;
+		}
+
+		if ( isset( $oldoutput ) && $newoutput !== $oldoutput ){
+			if ( !@rename( $oldoutput, $newoutput ) ){
+				reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のファイル『'.$oldoutput.'』を『'.$newoutput.'』に移動できませんでした。', EPGREC_ERROR );
+				return false;
+			}
+		}
+		if ( isset( $oldthumb ) && $newthumb !== $oldthumb ){
+			if ( !@rename( $oldthumb, $newthumb ) ){
+				if ( isset( $oldoutput ) && $newoutput !== $oldoutput ){
+					if ( !@rename( $newoutput, $oldoutput ) ){
+						reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のファイル『'.$newoutput.'』を『'.$oldoutput.'』に戻せませんでした。', EPGREC_ERROR );
+					}
+				}
+				reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のサムネイルファイル『'.$oldthumb.'』を『'.$newthumb.'』に変更できませんでした。', EPGREC_ERROR );
+				return false;
+			}
+		}
+
+		// 移動できたのでファイルパスも更新
+		$rec->path = $add_dir.$filename;
+		$rec->dirty = 1;
+		$rec->update();
+		reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'のファイル『'.$oldoutput.'』を『'.$newoutput.'』に移動しました。' );
+		return true;
+	}
+
+
+	private static function create_filenames(
+		$start_time,			// 開始時間
+		$end_time,				// 終了時間
+		$channel_type,			// チャンネル種別(GR/BS)
+		$channel_sid,			// チャンネルサービスID
+		$channel_number,		// チャンネル番号
+		$channel_name,			// チャンネル名
+		$title,					// タイトル
+		$category_id,			// カテゴリID
+		$mode,  				// 録画モード
+		$autorec,				// 自動録画ID
+		$duration				// 録画時間
+	) {
+		global $RECORD_MODE;
+		$settings = Settings::factory();
+		$spool_path = INSTALL_PATH . $settings->spool;
+		if( $autorec )
+			$keyword = new DBRecord( KEYWORD_TBL, 'id', $autorec );
+
+/*
+		%TITLE%			番組タイトル
+		%TITLEn%		番組タイトル(n=1-9 1枠の複数タイトルから選別変換 '/'でセパレートされているものとする)
+		%TL_SBn%		タイトル+複数話分割(n=1-n 1枠の複数サブタイトルから選別変換)
+		%ST%			開始日時（ex.200907201830)
+		%ET%			終了日時
+		%TYPE%			GR/BS/CS
+		%SID%			サービスID
+		%CH%			チャンネル番号
+		%CHNAME%		チャンネル名
+		%DOW%			曜日（Sun-Mon）
+		%DOWJ%			曜日（日-土）
+		%YEAR%			開始年
+		%MONTH%			開始月
+		%DAY%			開始日
+		%HOUR%			開始時
+		%MIN%			開始分
+		%SEC%			開始秒
+		%DURATION%		録画時間（秒）
+		%DURATIONHMS%	録画時間（hh:mm:ss）
+*/
+		$day_of_week = array( '日','月','火','水','木','金','土' );
+		$filename = $autorec && $keyword->filename_format != "" ? $keyword->filename_format : $settings->filename_format;
+
+		$temp = trim($title);
+		if( strncmp( $temp, '[￥]', 5 ) == 0 ){
+			$out_title = substr( $temp, 5 );
+		}else
+			$out_title = $temp;
+		// %TITLE%
+		$filename = mb_str_replace('%TITLE%', $out_title, $filename);
+		// %TITLEn%	番組タイトル(n=1-9 1枠の複数タイトルから選別変換 '/'でセパレートされているものとする)
+		$magic_c = strpos( $filename, '%TITLE' );
+		if( $magic_c !== FALSE ){
+			$tl_num = $filename[$magic_c+6];
+			if( ctype_digit( $tl_num ) && $filename[$magic_c+7]==='%' ){
+				if( strpos( $out_title, '/' )!==FALSE ){
+					$split_tls = explode( '/', $out_title );
+					$filename  = mb_str_replace( '%TITLE'.$tl_num.'%', $split_tls[(int)$tl_num-1], $filename );
+				}else
+					$filename = mb_str_replace( '%TITLE'.$tl_num.'%', $out_title.$tl_num, $filename );
+			}
+		}
+		// %TL_SBn%	タイトル+複数話分割(n=1-n 1枠の複数サブタイトルから選別変換)
+		$magic_c = strpos( $filename, '%TL_SB' );
+		if( $magic_c !== FALSE ){
+			$magic_c += 6;
+			$tl_num   = 0;
+			while( ctype_digit( $filename[$magic_c] ) )
+				$tl_num = $tl_num * 10 + (int)$filename[$magic_c++];
+			if( $tl_num>0 && $filename[$magic_c]==='%' ){
+				if( strpos( $out_title, '」#' ) !== FALSE ){
+					list( $pictitle, $sbtls ) = explode( ' #', $out_title );
+					$split_tls = explode( '」#', $sbtls );
+					$pictitle .= ' #'.$split_tls[$tl_num-1];
+					if( $tl_num < count( $split_tls ) )
+						$pictitle .= '」';
+					$filename = mb_str_replace( '%TL_SB'.$tl_num.'%', $pictitle, $filename );
+				}else
+					$filename = mb_str_replace( '%TL_SB'.$tl_num.'%', $out_title, $filename );
+			}
+		}
+		// %ST%	開始日時
+		$filename = mb_str_replace('%ST%',date('YmdHis', $start_time), $filename );
+		// %ET%	終了日時
+		$filename = mb_str_replace('%ET%',date('YmdHis', $end_time), $filename );
+		// %TYPE%	GR/BS
+		$filename = mb_str_replace('%TYPE%',$channel_type, $filename );
+		// %SID%	サービスID
+		$filename = mb_str_replace('%SID%',$channel_sid, $filename );
+		// %CH%	チャンネル番号
+		$filename = mb_str_replace('%CH%',$channel_number, $filename );
+		// %CHNAME%	チャンネル名
+		$filename = mb_str_replace('%CHNAME%',$channel_name, $filename );
+		// %DOW%	曜日（Sun-Mon）
+		$filename = mb_str_replace('%DOW%',date('D', $start_time), $filename );
+		// %DOWJ%	曜日（日-土）
+		$filename = mb_str_replace('%DOWJ%',$day_of_week[(int)date('w', $start_time)], $filename );
+		// %YEAR%	開始年
+		$filename = mb_str_replace('%YEAR%',date('Y', $start_time), $filename );
+		// %MONTH%	開始月
+		$filename = mb_str_replace('%MONTH%',date('m', $start_time), $filename );
+		// %DAY%	開始日
+		$filename = mb_str_replace('%DAY%',date('d', $start_time), $filename );
+		// %HOUR%	開始時
+		$filename = mb_str_replace('%HOUR%',date('H', $start_time), $filename );
+		// %MIN%	開始分
+		$filename = mb_str_replace('%MIN%',date('i', $start_time), $filename );
+		// %SEC%	開始秒
+		$filename = mb_str_replace('%SEC%',date('s', $start_time), $filename );
+		// %DURATION%	録画時間（秒）
+		$filename = mb_str_replace('%DURATION%',$duration, $filename );
+		// %DURATIONHMS%	録画時間（hh:mm:ss）
+		$filename = mb_str_replace('%DURATIONHMS%',transTime($duration,TRUE), $filename );
+		// %[YmdHisD]*%	開始日時(date()に書式をそのまま渡す 非変換部に'%'を使う場合は誤変換に注意・対策はしない)
+		if( substr_count( $filename, '%' ) >= 2 ){
+			$split_tls = explode( '%', $filename );
+			$iti       = $filename[0]==='%' ? 0 : 1;
+			$filename  = mb_str_replace('%'.$split_tls[$iti].'%',date( $split_tls[$iti], $start_time ), $filename );
+		}
+
+		if( defined( 'KATAUNA' ) ){
+			// しょぼかるからサブタイトル取得(スケジュール未登録)
+			if( $category_id==8 && strpos( $filename, '「」' )!==FALSE ){
+				$title_piece = explode( ' #', $filename );		// タイトル分離
+				$trans       = str_replace( ' ', '', $title_piece[0] );
+				if( ( $handle = fopen( INSTALL_PATH.'/settings/Title_base.csv', "r+") ) !== FALSE ){
+					do{
+						// タイトルリスト1行読み込み
+						if( ( $data = fgetcsv( $handle ) ) === FALSE ){
+							// 該当タイトルをしょぼカレで検索
+							$search_nm = $title_piece[0];
+							while(1){
+								$find_ps = file_get_contents( 'http://cal.syoboi.jp/find?sd=0&r=0&v=0&kw='.urlencode($search_nm) );		// エンコードは変わるかも
+								if( $find_ps !== FALSE ){
+									if( strpos( $find_ps, "href=\"/tid/" ) !== FALSE ){
+										list( $dust_trim, $dust ) = explode( '外部サイトの検索結果', $find_ps );
+										$tl_list = explode( "href=\"/tid/", $dust_trim );
+										for( $loop=1; $loop<count($tl_list); $loop++ ){
+											if( strpos( $tl_list[$loop], "\">".$search_nm.'</a>' ) !== FALSE ){
+												list( $tid, ) = explode( "\">", $tl_list[$loop] );
+												$data = array( (int)$tid, 1, $title_piece[0], $trans, str_replace( '・', '', $trans ) );
+												fputcsv( $handle, $data );
+												break 2;
+											}
+										}
+										break 2;
+									}else{
+										if( $search_nm === $trans )
+											break 2;	// end
+										$search_nm = $trans;
+									}
+								}else
+									break 2;
+							}
+						}
+						if( is_numeric( $data[0] ) && $data[0]!==0 ){
+							switch( $data[1] ){
+								case 1:		// 国内
+								case 4:		// 特撮
+								case 10:	// 国内放送終了
+								case 7:		// OVA
+								case 20:	// 児童
+								case 21:	// 非視聴
+								case 22:	// 海外
+									$num = count( $data );
+									for( $loop=2; $loop<$num; $loop++ ){
+										if( $loop === 2 ){
+											$official = str_replace( '^', '', $data[2] );
+											$dte      = str_replace( ' ', '', $official );
+										}else
+											$dte = $data[$loop];
+										if( strcmp( $trans, $dte ) == 0 ){
+											// 異形タイトルを正式タイトルに修正
+											if( $loop === 2 ){
+												if( strcmp( $official, $title_piece[0] ) )
+													$filename = str_replace( $title_piece[0], $official, $filename );
+											}else
+												$filename = str_replace( $dte, $official, $filename );
+											// しょぼカレから全サブタイトル取得
+											$st_list = file( 'http://cal.syoboi.jp/db.php?Command=TitleLookup&Fields=SubTitles&TID='.$data[0], FILE_IGNORE_NEW_LINES );
+											if( $st_list !== FALSE ){
+												$st_count = count( $st_list );
+												if( strpos( $title_piece[1], '」#' ) !== FALSE )
+													$sub_pieces = explode( '」#', $title_piece[1] );
+												else
+													$sub_pieces[0] = $title_piece[1];
+												foreach( $sub_pieces as $sub_piece ){
+													if( strpos( $sub_piece.'」', '「」' ) !== FALSE ){
+														$scount = (int)$sub_piece;							// 強引？
+														if( $scount <= $st_count ){
+															$num_cmp = sprintf( "%d*", $scount );
+															if( strpos( $st_list[$scount-1], $num_cmp ) !== FALSE ){
+																if( $scount === $st_count ){
+																	list( $subsplit, $dust ) = explode( '</SubTitles>', $st_list[$scount-1] );
+																	list( , $subtitle )      = explode( $num_cmp, $subsplit );
+																}else
+																	list( , $subtitle ) = explode( $num_cmp, $st_list[$scount-1] );
+																$filename = str_replace( sprintf( '#%02d「」', $scount ), sprintf( '#%02d「%s」', $scount, $subtitle ), $filename );
+															}
+														}
+													}
+												}
+											}
+											break 3;
+										}
+									}
+									break;
+								default:
+									break;
+							}
+						}
+					}while( !isset( $search_nm ) );
+					fclose( $handle );
+				}
+			}
+		}
+
+		// あると面倒くさそうな文字を全部_に
+//		$filename = preg_replace("/[ \.\/\*:<>\?\\|()\'\"&]/u","_", trim($filename) );
+		
+		// 全角に変換したい場合に使用
+/*		$trans = array( "[" => "［",
+						"]" => "］",
+						"/" => "／",
+						"'" => "’",
+						"\"" => "”",
+						"\\" => "￥",
+				);
+		$filename = strtr( $filename, $trans );
+*/
+		// UTF-8に対応できない環境があるようなのでmb_ereg_replaceに戻す
+//		$filename = mb_ereg_replace("[ \./\*:<>\?\\|()\'\"&]","_", trim($filename) );
+		$filename = mb_ereg_replace("[\\/\'\"]","_", trim($filename) );
+
+		// ディレクトリ付加
+		$add_dir = $autorec && $keyword->directory != "" ? $keyword->directory.'/' : "";
+
+		// 文字コード変換
+		if( defined( 'FILESYSTEM_ENCODING' ) ) {
+			$filename = mb_convert_encoding( $filename, FILESYSTEM_ENCODING, 'UTF-8' );
+			$add_dir  = mb_convert_encoding( $add_dir, FILESYSTEM_ENCODING, 'UTF-8' );
+		}
+
+		// ファイル名長制限+ファイル名重複解消
+		$fl_len     = strlen( $filename );
+		$fl_len_lmt = 255 - strlen( $RECORD_MODE["$mode"]['suffix'] );
+		// サムネール
+		if( (boolean)$settings->use_thumbs ){
+			$fl_len_lmt -= 4;		// '.jpg'
+		}
+		if( $fl_len > $fl_len_lmt ){
+			$longname = $filename;
+			$filename = mb_strncpy( $filename, $fl_len_lmt );
+			if( preg_match( '/^(.*)\040(\#\d+)(「.*」)/', $longname, $matches ) )
+				file_put_contents( $spool_path.'/'.$add_dir.$matches[1].' '.$matches[2].'.txt', $matches[2].str_replace('」#', "」\n#", $matches[3] )."\n\n", FILE_APPEND );
+			else
+				file_put_contents( $spool_path.'/longname.txt', $filename." <-\n".$longname."\n->\n", FILE_APPEND );
+			$fl_len = strlen( $filename );
+		}
+		$files = scandir( $spool_path.'/'.$add_dir );
+		if( $files !== FALSE )
+			array_splice( $files, 0, 2 );
+		else
+			$files = array();
+		$file_cnt = 0;
+		$tmp_name = $filename;
+		$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
+		while( in_array( $tmp_name.$RECORD_MODE["$mode"]['suffix'], $files ) || DBRecord::countRecords( RESERVE_TBL, $sql_que )!==0 ){
+			$file_cnt++;
+			$len_dec = strlen( (string)$file_cnt );
+			if( $fl_len > $fl_len_lmt-$len_dec ){
+				$filename = mb_strncpy( $filename, $fl_len_lmt-$len_dec );
+				$fl_len   = strlen( $filename );
+			}
+			$tmp_name = $filename.$file_cnt;
+			$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
+		}
+		$filename  = $tmp_name.$RECORD_MODE["$mode"]['suffix'];
+		$thumbname = $filename.'.jpg';
+
+		return array( $add_dir, $filename, $thumbname );
+	}
+
+
+	private static function do_reserve(
+		$rrec,					// 登録レコード
+		$env,					// 録画設定
+		$at_start,				// コマンド起動時間
+		$sleep_time				// 録画前待ち時間
+	) {
+		$settings   = Settings::factory();
+		$spool_path = INSTALL_PATH . $settings->spool;
+
+		// AT発行準備
+		$cmdline = escapeshellcmd( $settings->at.' '.date( 'H:i m/d/Y', $at_start ) );
+		$descriptor = array( 0 => array( 'pipe', 'r' ),
+		                     1 => array( 'pipe', 'w' ),
+		                     2 => array( 'pipe', 'w' ),
+		);
+		// ATで予約する
+		$process = proc_open( $cmdline , $descriptor, $pipes, $spool_path, $env );
+		if( !is_resource( $process ) ) {
+			reclog( 'atの実行に失敗した模様', EPGREC_ERROR );
+			throw new Exception( 'AT実行エラー' );
+		}
+		fwrite( $pipes[0], 'echo $$ >/tmp/tuner_'.$rrec->type.$rrec->tuner."\n" );		//SHのPID
+		if( $sleep_time ){
+			$tmpfile = $spool_path.'/tmp';
+			if( $rrec->program_id && $sleep_time > $settings->rec_switch_time )
+				fwrite( $pipes[0], "echo 'temp' > ".$tmpfile.' & sync & '.INSTALL_PATH.'/scoutEpg.php '.$rrec->id.' & rm -f '.$tmpfile." &\n" );		//HDD spin-up + 単発EPG更新
+			else
+				fwrite( $pipes[0], "echo 'temp' > ".$tmpfile.' & sync & rm -f '.$tmpfile." &\n" );		//HDD spin-up
+			fwrite( $pipes[0], $settings->sleep.' '.$sleep_time."\n" );
+		}
+		fwrite( $pipes[0], DO_RECORD.' '.$rrec->id."\n" );		//$rrec->id追加は録画キャンセルのためのおまじない
+		fwrite( $pipes[0], COMPLETE_CMD.' '.$rrec->id."\n" );
+		if( (boolean)$settings->use_thumbs ){
+			$gen_thumbnail = defined( 'GEN_THUMBNAIL' ) ? GEN_THUMBNAIL : INSTALL_PATH.'/gen-thumbnail.sh';
+			fwrite( $pipes[0], $gen_thumbnail."\n" );
+		}
+		fclose( $pipes[0] );
+		// 標準エラーを取る
+		$rstring = stream_get_contents( $pipes[2] );
+
+		fclose( $pipes[2] );
+		fclose( $pipes[1] );
+		proc_close( $process );
+		// job番号を取り出す
+		$rarr = array();
+		$tok = strtok( $rstring, " \n" );
+		while( $tok !== false ) {
+			array_push( $rarr, $tok );
+			$tok = strtok( " \n" );
+		}
+		// OSを識別する(Linux、またはFreeBSD)
+		//$job = php_uname('s') == 'FreeBSD' ? 'Job' : 'job';
+		$job = PHP_OS == 'FreeBSD' ? 'Job' : 'job';
+		$key = array_search( $job, $rarr );
+		if( $key !== false ) {
+			if( is_numeric( $rarr[$key+1]) ) {
+				return $rarr[$key+1];	// 成功
+			}
+		}
+		// エラー
+		reclog( 'ジョブNoの取得に失敗', EPGREC_ERROR );
+		throw new Exception( 'ジョブNoの取得に失敗' );
+	}
+
+
 	private static function at_set(
-		$start_time,				// 開始時間
+		$start_time,			// 開始時間
 		$end_time,				// 終了時間
 		$channel_id,			// チャンネルID
 		$title = 'none',		// タイトル
@@ -721,7 +1279,6 @@ LOG_THROW:;
 		$discontinuity,			// 隣接短縮可否
 		$shortened				// 隣接短縮フラグ
 	) {
-		global $RECORD_MODE;
 		$settings   = Settings::factory();
 		$spool_path = INSTALL_PATH.$settings->spool;
 		$crec_      = new DBRecord( CHANNEL_TBL, 'id', $channel_id );
@@ -840,269 +1397,11 @@ LOG_THROW:;
 			$duration += $settings->extra_time;			//重複による短縮がされてないものは糊代を付ける
 		$rrec = null;
 		try {
-			// ここからファイル名生成
-/*
-			%TITLE%	番組タイトル
-			// %TITLEn%	番組タイトル(n=1-9 1枠の複数タイトルから選別変換 '/'でセパレートされているものとする)
-			%ST%	開始日時（ex.200907201830)
-			%ET%	終了日時
-			%TYPE%	GR/BS/CS
-			%CH%	チャンネル番号
-			// %SID%	サービスID
-			// %CHNAME%	チャンネル名
-			%DOW%	曜日（Sun-Mon）
-			%DOWJ%	曜日（日-土）
-			%YEAR%	開始年
-			%MONTH%	開始月
-			%DAY%	開始日
-			%HOUR%	開始時
-			%MIN%	開始分
-			%SEC%	開始秒
-			%DURATION%	録画時間（秒）
-			// %DURATIONHMS%	録画時間（hh:mm:ss）
-*/
-			$day_of_week = array( '日','月','火','水','木','金','土' );
-			$filename = $autorec&&$keyword->filename_format!="" ? $keyword->filename_format : $settings->filename_format;
-
-			$temp = trim($title);
-			if( strncmp( $temp, '[￥]', 5 ) == 0 ){
-				$out_title = substr( $temp, 5 );
-			}else
-				$out_title = $temp;
-			// %TITLE%
-			$filename = mb_str_replace('%TITLE%', $out_title, $filename);
-			// %TITLEn%	番組タイトル(n=1-9 1枠の複数タイトルから選別変換 '/'でセパレートされているものとする)
-			$magic_c = strpos( $filename, '%TITLE' );
-			if( $magic_c !== FALSE ){
-				$tl_num = $filename[$magic_c+6];
-				if( ctype_digit( $tl_num ) && $filename[$magic_c+7]==='%' ){
-					if( strpos( $out_title, '/' )!==FALSE ){
-						$split_tls = explode( '/', $out_title );
-						$filename  = mb_str_replace( '%TITLE'.$tl_num.'%', $split_tls[(int)$tl_num-1], $filename );
-					}else
-						$filename = mb_str_replace( '%TITLE'.$tl_num.'%', $out_title.$tl_num, $filename );
-				}
-			}
-			// %TL_SBn%	タイトル+複数話分割(n=1-n 1枠の複数サブタイトルから選別変換)
-			$magic_c = strpos( $filename, '%TL_SB' );
-			if( $magic_c !== FALSE ){
-				$magic_c += 6;
-				$tl_num   = 0;
-				while( ctype_digit( $filename[$magic_c] ) )
-					$tl_num = $tl_num * 10 + (int)$filename[$magic_c++];
-				if( $tl_num>0 && $filename[$magic_c]==='%' ){
-					if( strpos( $out_title, '」#' ) !== FALSE ){
-						list( $pictitle, $sbtls ) = explode( ' #', $out_title );
-						$split_tls = explode( '」#', $sbtls );
-						$pictitle .= ' #'.$split_tls[$tl_num-1];
-						if( $tl_num < count( $split_tls ) )
-							$pictitle .= '」';
-						$filename = mb_str_replace( '%TL_SB'.$tl_num.'%', $pictitle, $filename );
-					}else
-						$filename = mb_str_replace( '%TL_SB'.$tl_num.'%', $out_title, $filename );
-				}
-			}
-			// %ST%	開始日時
-			$filename = mb_str_replace('%ST%',date('YmdHis', $start_time), $filename );
-			// %ET%	終了日時
-			$filename = mb_str_replace('%ET%',date('YmdHis', $end_time), $filename );
-			// %TYPE%	GR/BS
-			$filename = mb_str_replace('%TYPE%',$crec_->type, $filename );
-			// %SID%	サービスID
-			$filename = mb_str_replace('%SID%',$crec_->sid, $filename );
-			// %CH%	チャンネル番号
-			$filename = mb_str_replace('%CH%',$crec_->channel, $filename );
-			// %CHNAME%	チャンネル名
-			$filename = mb_str_replace('%CHNAME%',$crec_->name, $filename );
-			// %DOW%	曜日（Sun-Mon）
-			$filename = mb_str_replace('%DOW%',date('D', $start_time), $filename );
-			// %DOWJ%	曜日（日-土）
-			$filename = mb_str_replace('%DOWJ%',$day_of_week[(int)date('w', $start_time)], $filename );
-			// %YEAR%	開始年
-			$filename = mb_str_replace('%YEAR%',date('Y', $start_time), $filename );
-			// %MONTH%	開始月
-			$filename = mb_str_replace('%MONTH%',date('m', $start_time), $filename );
-			// %DAY%	開始日
-			$filename = mb_str_replace('%DAY%',date('d', $start_time), $filename );
-			// %HOUR%	開始時
-			$filename = mb_str_replace('%HOUR%',date('H', $start_time), $filename );
-			// %MIN%	開始分
-			$filename = mb_str_replace('%MIN%',date('i', $start_time), $filename );
-			// %SEC%	開始秒
-			$filename = mb_str_replace('%SEC%',date('s', $start_time), $filename );
-			// %DURATION%	録画時間（秒）
-			$filename = mb_str_replace('%DURATION%',$duration, $filename );
-			// %DURATIONHMS%	録画時間（hh:mm:ss）
-			$filename = mb_str_replace('%DURATIONHMS%',transTime($duration,TRUE), $filename );
-			// %[YmdHisD]*%	開始日時(date()に書式をそのまま渡す 非変換部に'%'を使う場合は誤変換に注意・対策はしない)
-			if( substr_count( $filename, '%' ) >= 2 ){
-				$split_tls = explode( '%', $filename );
-				$iti       = $filename[0]==='%' ? 0 : 1;
-				$filename  = mb_str_replace('%'.$split_tls[$iti].'%',date( $split_tls[$iti], $start_time ), $filename );
-			}
-
-			if( defined( 'KATAUNA' ) ){
-				// しょぼかるからサブタイトル取得(スケジュール未登録)
-				if( $category_id==8 && strpos( $filename, '「」' )!==FALSE ){
-					$title_piece = explode( ' #', $filename );		// タイトル分離
-					$trans       = str_replace( ' ', '', $title_piece[0] );
-					if( ( $handle = fopen( INSTALL_PATH.'/settings/Title_base.csv', "r+") ) !== FALSE ){
-						do{
-							// タイトルリスト1行読み込み
-							if( ( $data = fgetcsv( $handle ) ) === FALSE ){
-								// 該当タイトルをしょぼカレで検索
-								$search_nm = $title_piece[0];
-								while(1){
-									$find_ps = file_get_contents( 'http://cal.syoboi.jp/find?sd=0&r=0&v=0&kw='.urlencode($search_nm) );		// エンコードは変わるかも
-									if( $find_ps !== FALSE ){
-										if( strpos( $find_ps, "href=\"/tid/" ) !== FALSE ){
-											list( $dust_trim, $dust ) = explode( '外部サイトの検索結果', $find_ps );
-											$tl_list = explode( "href=\"/tid/", $dust_trim );
-											for( $loop=1; $loop<count($tl_list); $loop++ ){
-												if( strpos( $tl_list[$loop], "\">".$search_nm.'</a>' ) !== FALSE ){
-													list( $tid, ) = explode( "\">", $tl_list[$loop] );
-													$data = array( (int)$tid, 1, $title_piece[0], $trans, str_replace( '・', '', $trans ) );
-													fputcsv( $handle, $data );
-													break 2;
-												}
-											}
-											break 2;
-										}else{
-											if( $search_nm === $trans )
-												break 2;	// end
-											$search_nm = $trans;
-										}
-									}else
-										break 2;
-								}
-							}
-							if( is_numeric( $data[0] ) && $data[0]!==0 ){
-								switch( $data[1] ){
-									case 1:		// 国内
-									case 4:		// 特撮
-									case 10:	// 国内放送終了
-									case 7:		// OVA
-									case 20:	// 児童
-									case 21:	// 非視聴
-									case 22:	// 海外
-										$num = count( $data );
-										for( $loop=2; $loop<$num; $loop++ ){
-											if( $loop === 2 ){
-												$official = str_replace( '^', '', $data[2] );
-												$dte      = str_replace( ' ', '', $official );
-											}else
-												$dte = $data[$loop];
-											if( strcmp( $trans, $dte ) == 0 ){
-												// 異形タイトルを正式タイトルに修正
-												if( $loop === 2 ){
-													if( strcmp( $official, $title_piece[0] ) )
-														$filename = str_replace( $title_piece[0], $official, $filename );
-												}else
-													$filename = str_replace( $dte, $official, $filename );
-												// しょぼカレから全サブタイトル取得
-												$st_list = file( 'http://cal.syoboi.jp/db.php?Command=TitleLookup&Fields=SubTitles&TID='.$data[0], FILE_IGNORE_NEW_LINES );
-												if( $st_list !== FALSE ){
-													$st_count = count( $st_list );
-													if( strpos( $title_piece[1], '」#' ) !== FALSE )
-														$sub_pieces = explode( '」#', $title_piece[1] );
-													else
-														$sub_pieces[0] = $title_piece[1];
-													foreach( $sub_pieces as $sub_piece ){
-														if( strpos( $sub_piece.'」', '「」' ) !== FALSE ){
-															$scount = (int)$sub_piece;							// 強引？
-															if( $scount <= $st_count ){
-																$num_cmp = sprintf( "%d*", $scount );
-																if( strpos( $st_list[$scount-1], $num_cmp ) !== FALSE ){
-																	if( $scount === $st_count ){
-																		list( $subsplit, $dust ) = explode( '</SubTitles>', $st_list[$scount-1] );
-																		list( , $subtitle )      = explode( $num_cmp, $subsplit );
-																	}else
-																		list( , $subtitle ) = explode( $num_cmp, $st_list[$scount-1] );
-																	$filename = str_replace( sprintf( '#%02d「」', $scount ), sprintf( '#%02d「%s」', $scount, $subtitle ), $filename );
-																}
-															}
-														}
-													}
-												}
-												break 3;
-											}
-										}
-										break;
-									default:
-										break;
-								}
-							}
-						}while( !isset( $search_nm ) );
-						fclose( $handle );
-					}
-				}
-			}
-
-			// あると面倒くさそうな文字を全部_に
-//			$filename = preg_replace("/[ \.\/\*:<>\?\\|()\'\"&]/u","_", trim($filename) );
-			
-			// 全角に変換したい場合に使用
-/*			$trans = array( "[" => "［",
-							"]" => "］",
-							"/" => "／",
-							"'" => "’",
-							"\"" => "”",
-							"\\" => "￥",
-						);
-			$filename = strtr( $filename, $trans );
-*/
-			// UTF-8に対応できない環境があるようなのでmb_ereg_replaceに戻す
-//			$filename = mb_ereg_replace("[ \./\*:<>\?\\|()\'\"&]","_", trim($filename) );
-			$filename = mb_ereg_replace("[\\/\'\"]","_", trim($filename) );
-
-			// ディレクトリ付加
-			$add_dir = $autorec && $keyword->directory!="" ? $keyword->directory.'/' : "";
-
-			// 文字コード変換
-			if( defined( 'FILESYSTEM_ENCODING' ) ) {
-				$filename = mb_convert_encoding( $filename, FILESYSTEM_ENCODING, 'UTF-8' );
-				$add_dir  = mb_convert_encoding( $add_dir, FILESYSTEM_ENCODING, 'UTF-8' );
-			}
-
-			// ファイル名長制限+ファイル名重複解消
-			$fl_len     = strlen( $filename );
-			$fl_len_lmt = 255 - strlen( $RECORD_MODE["$mode"]['suffix'] );
-			// サムネール
-			if( (boolean)$settings->use_thumbs ){
-				$gen_thumbnail = defined( 'GEN_THUMBNAIL' ) ? GEN_THUMBNAIL : INSTALL_PATH.'/gen-thumbnail.sh';
-				$fl_len_lmt   -= 4;		// '.jpg'
-			}
-			if( $fl_len > $fl_len_lmt ){
-				$longname = $filename;
-				$filename = mb_strncpy( $filename, $fl_len_lmt );
-				if( preg_match( '/^(.*)\040(\#\d+)(「.*」)/', $longname, $matches ) )
-					file_put_contents( $spool_path.'/'.$add_dir.$matches[1].' '.$matches[2].'.txt', $matches[2].str_replace('」#', "」\n#", $matches[3] )."\n\n", FILE_APPEND );
-				else
-					file_put_contents( $spool_path.'/longname.txt', $filename." <-\n".$longname."\n->\n", FILE_APPEND );
-				$fl_len = strlen( $filename );
-			}
-			$files = scandir( $spool_path.'/'.$add_dir );
-			if( $files !== FALSE )
-				array_splice( $files, 0, 2 );
-			else
-				$files = array();
-			$file_cnt = 0;
-			$tmp_name = $filename;
-			$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
-			while( in_array( $tmp_name.$RECORD_MODE["$mode"]['suffix'], $files ) || DBRecord::countRecords( RESERVE_TBL, $sql_que )!==0 ){
-				$file_cnt++;
-				$len_dec = strlen( (string)$file_cnt );
-				if( $fl_len > $fl_len_lmt-$len_dec ){
-					$filename = mb_strncpy( $filename, $fl_len_lmt-$len_dec );
-					$fl_len   = strlen( $filename );
-				}
-				$tmp_name = $filename.$file_cnt;
-				$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
-			}
-			$filename  = $tmp_name.$RECORD_MODE["$mode"]['suffix'];
-			$thumbname = $filename.'.jpg';
-
-			// ファイル名生成終了
+			// ファイル名生成
+			$filenames = self::create_filenames( $start_time, $end_time, $crec_->type, $crec_->sid, $crec_->channel, $crec_->name, $title, $category_id, $mode, $autorec, $duration );
+			$add_dir   = $filenames[0];
+			$filename  = $filenames[1];
+			$thumbname = $filenames[2];
 
 			// 予約レコード生成
 			$rrec = new DBRecord( RESERVE_TBL );
@@ -1125,83 +1424,34 @@ LOG_THROW:;
 			$rrec->discontinuity = $discontinuity;
 			$rrec->shortened     = $shortened;
 			$rrec->reserve_disc  = md5( $crec_->channel_disc . toDatetime( $start_time ). toDatetime( $end_time ) );
-			//
-			$descriptor = array( 0 => array( 'pipe', 'r' ),
-			                     1 => array( 'pipe', 'w' ),
-			                     2 => array( 'pipe', 'w' ),
-			);
-			// AT発行準備
-			$cmdline = $settings->at.' '.date('H:i m/d/Y', $at_start);
+
+			// 予約実施
 			$env = array( 'CHANNEL'    => $crec_->channel,
-						  'DURATION'   => $duration,
-						  'OUTPUT'     => $spool_path.'/'.$add_dir.$filename,
-						  'TYPE'       => $crec_->type,
-						  'TUNER'      => $tuner,
-						  'MODE'       => $mode,
-						  'TUNER_UNIT' => TUNER_UNIT1,
-						  'THUMB'      => INSTALL_PATH.$settings->thumbs.'/'.$thumbname,
-						  'FORMER'     => $settings->former_time,
-						  'FFMPEG'     => $settings->ffmpeg,
-						  'SID'        => $crec_->sid,
-						  'EID'        => $eid,
-						  'RESOLUTION' => $resolution,
-						  'ASPECT'     => $aspect,
-						  'AUDIO_TYPE' => $audio_type,
-						  'BILINGUAL'  => $bilingual,
+			              'DURATION'   => $duration,
+			              'OUTPUT'     => $spool_path.'/'.$add_dir.$filename,
+			              'TYPE'       => $crec_->type,
+			              'TUNER'      => $tuner,
+			              'MODE'       => $mode,
+			              'TUNER_UNIT' => TUNER_UNIT1,
+			              'THUMB'      => INSTALL_PATH.$settings->thumbs.'/'.$thumbname,
+			              'FORMER'     => $settings->former_time,
+			              'FFMPEG'     => $settings->ffmpeg,
+			              'SID'        => $crec_->sid,
+			              'EID'        => $eid,
+			              'RESOLUTION' => $resolution,
+			              'ASPECT'     => $aspect,
+			              'AUDIO_TYPE' => $audio_type,
+			              'BILINGUAL'  => $bilingual,
 			);
-			// ATで予約する
-			$process = proc_open( $cmdline , $descriptor, $pipes, $spool_path, $env );
-			if( !is_resource( $process ) ) {
-				$rrec->delete();
-				reclog( 'atの実行に失敗した模様', EPGREC_ERROR);
-				throw new Exception('AT実行エラー');
-			}
-			fwrite($pipes[0], 'echo $$ >/tmp/tuner_'.$rrec->type.$tuner."\n" );		//SHのPID
-			if( $sleep_time ){
-				if( $program_id && $sleep_time > $settings->rec_switch_time )
-					fwrite($pipes[0], "echo 'temp' > ".$spool_path.'/tmp & sync & '.INSTALL_PATH.'/scoutEpg.php '.$rrec->id." &\n" );		//HDD spin-up + 単発EPG更新
-				else
-					fwrite($pipes[0], "echo 'temp' > ".$spool_path."/tmp & sync &\n" );		//HDD spin-up
-				fwrite($pipes[0], $settings->sleep.' '.$sleep_time."\n" );
-			}
-			fwrite($pipes[0], DO_RECORD." ".$rrec->id."\n" );		//$rrec->id追加は録画キャンセルのためのおまじない
-			fwrite($pipes[0], COMPLETE_CMD." ".$rrec->id."\n" );
-			if( $settings->use_thumbs == 1 ) {
-				fwrite($pipes[0], $gen_thumbnail."\n" );
-			}
-			fclose($pipes[0]);
-			// 標準エラーを取る
-			$rstring = stream_get_contents( $pipes[2]);
-			
-			fclose( $pipes[2] );
-		    fclose( $pipes[1] );
-			proc_close( $process );
-			// job番号を取り出す
-			$rarr = array();
-			$tok = strtok( $rstring, " \n" );
-			while( $tok !== false ) {
-				array_push( $rarr, $tok );
-				$tok = strtok( " \n" );
-			}
-			// OSを識別する(Linux、またはFreeBSD)
-			//$job = php_uname('s') == 'FreeBSD' ? 'Job' : 'job';
-			$job = PHP_OS == 'FreeBSD' ? 'Job' : 'job';
-			$key = array_search( $job, $rarr );
+			$job = self::do_reserve( $rrec, $env, $at_start, $sleep_time );
 			if( isset( $sem_id ) )
 				while( sem_release( $sem_id ) === FALSE )
 					usleep( 100 );
-			if( $key !== false ) {
-				if( is_numeric( $rarr[$key+1]) ) {
-					$rrec->job = $rarr[$key+1];
-					$rrec->update();
-					reclog( '予約ID:'.$rrec->id.' '.$rrec->channel_disc.':T'.$rrec->tuner.'-Ch'.$rrec->channel.' '.$rrec->starttime.'『'.$title.'』を登録' );
-					return $program_id.':'.$tuner.':'.$rrec->id;			// 成功
-				}
-			}
-			// エラー
-			$rrec->delete();
-			reclog( 'ジョブNoの取得に失敗', EPGREC_ERROR );
-			throw new Exception( 'ジョブNoの取得に失敗' );
+			$sem_id = null;
+			$rrec->job = $job;
+			$rrec->update();
+			reclog( '予約ID:'.$rrec->id.' '.$rrec->channel_disc.':T'.$rrec->tuner.'-Ch'.$rrec->channel.' '.$rrec->starttime.'『'.$title.'』を登録' );
+			return $program_id.':'.$tuner.':'.$rrec->id;			// 成功
 		}
 		catch( Exception $e ) {
 			if( $rrec != null ) {
@@ -1210,6 +1460,9 @@ LOG_THROW:;
 					$rrec->delete();
 				}
 			}
+			if( isset( $sem_id ) )
+				while( sem_release( $sem_id ) === FALSE )
+					usleep( 100 );
 			throw $e;
 		}
 	}

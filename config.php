@@ -1,5 +1,8 @@
 <?php
 
+// インストールパス
+define( "INSTALL_PATH", dirname(__FILE__) );
+
 // settings/gr_channel.phpが作成された場合、
 // config.php内の$GR_CHANNEL_MAPは無視されます
 
@@ -157,9 +160,6 @@ define( 'REST_ALERT', FALSE );						// 番組がヒットしない場合
 define( "SETTING_CHANGE_GIP", FALSE );				// グローバルIPからの設定変更を許可する場合はTRUE
 //////////////////////////////////////////////////////////////////////////////
 // 以降の変数・定数はほとんどの場合、変更する必要はありません
-
-
-define( "INSTALL_PATH", dirname(__FILE__) );		// インストールパス
 
 // 以降は必要に応じて変更する
 
