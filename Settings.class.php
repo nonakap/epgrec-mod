@@ -6,7 +6,7 @@ include_once( INSTALL_PATH . "/recLog.inc.php" );
 class Settings extends SimpleXMLElement {
 	
 	private static function conf_xml(){
-		return file_exists( '/etc/epgrecUNA/config.xml' ) ?  '/etc/epgrecUNA/config.xml' : INSTALL_PATH.'/settings/config.xml';
+		return file_exists( '/etc/epgrec/config.xml' ) ? '/etc/epgrec/config.xml' : INSTALL_PATH.'/settings/config.xml';
 	}
 
 	public static function factory() {
