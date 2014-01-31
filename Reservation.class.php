@@ -1240,20 +1240,16 @@ LOG_THROW:;
 		fclose( $pipes[2] );
 		fclose( $pipes[1] );
 		proc_close( $process );
+
 		// job番号を取り出す
-		$rarr = array();
-		$tok = strtok( $rstring, " \n" );
-		while( $tok !== false ) {
-			array_push( $rarr, $tok );
-			$tok = strtok( " \n" );
-		}
-		// OSを識別する(Linux、またはFreeBSD)
-		//$job = php_uname('s') == 'FreeBSD' ? 'Job' : 'job';
-		$job = PHP_OS == 'FreeBSD' ? 'Job' : 'job';
-		$key = array_search( $job, $rarr );
-		if( $key !== false ) {
-			if( is_numeric( $rarr[$key+1]) ) {
-				return $rarr[$key+1];	// 成功
+		$rarr = preg_split( '/[\s\n]+/', $rstring );
+		$jobs = array( 'job', 'Job' ); // Linux: job, *BSD: Job
+		foreach( $jobs as $job ){
+			$key = array_search( $job, $rarr );
+			if( $key !== false ) {
+				if( is_numeric( $rarr[$key+1] ) ) {
+					return $rarr[$key+1];	// 成功
+				}
 			}
 		}
 		// エラー
