@@ -8,7 +8,8 @@ include_once( INSTALL_PATH . '/Settings.class.php' );
 include_once( INSTALL_PATH . '/settings/menu_list.php' );
 
 // 設定ファイルの有無を検査する
-if( !file_exists( INSTALL_PATH.'/settings/config.xml') && !file_exists( '/etc/epgrec/config.xml' ) ) {
+$config_file = get_config_path( CONFIG_FILE );
+if( is_null( $config_file ) ){
     header( "Content-Type: text/html;charset=utf-8" );
     exit( "<script type=\"text/javascript\">\n" .
           "<!--\n".

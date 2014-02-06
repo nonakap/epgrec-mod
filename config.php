@@ -3,6 +3,26 @@
 // インストールパス
 define( "INSTALL_PATH", dirname(__FILE__) );
 
+// 設定ファイル
+define( "CONFIG_DIR", INSTALL_PATH.'/settings' );
+define( "EXTERNAL_CONFIG_DIR", '/etc/epgrec' );
+define( "CONFIG_FILE", 'config.xml' );
+define( "DB_CONFIG_FILE", 'db.conf.xml' );
+define( "TUNER_CONFIG_FILE", 'tuner.conf.php' );
+
+function get_config_path( $filename ){
+	$paths = array(
+		EXTERNAL_CONFIG_DIR.'/'.$filename,
+		CONFIG_DIR.'/'.$filename
+	);
+	foreach( $paths as $path ){
+		if( file_exists( $path ) && !is_dir( $path ) && is_readable( $path ) ){
+			return $path;
+		}
+	}
+	return null;
+}
+
 // settings/gr_channel.phpが作成された場合、
 // config.php内の$GR_CHANNEL_MAPは無視されます
 
@@ -83,8 +103,9 @@ $RECORD_MODE = array(
 // チューナー設定
 // settings/tuner.conf.php があればそれを優先する
 //
-if( file_exists( INSTALL_PATH."/settings/tuner.conf.php" ) ) {
-	include_once( INSTALL_PATH."/settings/tuner.conf.php" );
+$tuner_conf = get_config_path( 'tuner.conf.php' );
+if( !is_null( $tuner_conf ) ){
+	include_once( $tuner_conf );
 } else {
 	define( "TUNER_UNIT1", 0 );							// 第一チューナーの各放送波の論理チューナ数(地上波･衛星波で共用 ex.PT1が1枚なら2)
 	define( "TUNER_UNIT2", 0 );							// 上記以外の論理チューナ数(未使用)

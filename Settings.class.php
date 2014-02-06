@@ -5,17 +5,9 @@ include_once( INSTALL_PATH . "/recLog.inc.php" );
 
 class Settings extends SimpleXMLElement {
 
-	const CONFIG_DIR = '/etc/epgrec';
-	const CONFIG_FILE = '/etc/epgrec/config.xml';
-	const DB_CONFIG_FILE = '/etc/epgrec/db.conf.xml';
-
-	private static function conf_xml(){
-		return file_exists( self::CONFIG_FILE ) && !is_dir( self::CONFIG_FILE ) ? self::CONFIG_FILE : INSTALL_PATH.'/settings/config.xml';
-	}
-
 	public static function factory() {
-		$CONFIG_XML = self::conf_xml();
-		if( file_exists( $CONFIG_XML ) ){
+		$CONFIG_XML = get_config_path( CONFIG_FILE );
+		if( !is_null( $CONFIG_XML ) ){
 			$xmlfile = file_get_contents( $CONFIG_XML );
 			$obj = new self($xmlfile);
 
@@ -144,8 +136,9 @@ class Settings extends SimpleXMLElement {
 	}
 
 	private static function load_db_conf( $obj ){
-		if( is_readable( self::DB_CONFIG_FILE ) && !is_dir( self::DB_CONFIG_FILE ) ){
-			$dbconf = simplexml_load_file( self::DB_CONFIG_FILE );
+		$db_conf = get_config_path( DB_CONFIG_FILE );
+		if( !is_null( $db_conf ) ){
+			$dbconf = simplexml_load_file( $db_conf );
 			if( $dbconf !== FALSE ){
 				if( isset( $dbconf->db_host ) ){
 					$obj->db_host = $dbconf->db_host;
@@ -214,16 +207,20 @@ class Settings extends SimpleXMLElement {
 	}
 
 	public function save() {
-		if ( is_readable( self::DB_CONFIG_FILE ) && !is_dir( self::DB_CONFIG_FILE ) ){
-			$xml = $this->asXML();
-			$save_obj = new self( $xml );
-			unset($save_obj->db_host);
-			unset($save_obj->db_name);
-			unset($save_obj->db_user);
-			unset($save_obj->db_pass);
-			$save_obj->asXML( self::conf_xml() );
-		}else{
-			$this->asXML( self::conf_xml() );
+		$config = get_config_path( CONFIG_FILE );
+		if( !is_null( $config ) ){
+			$db_conf = get_config_path( DB_CONFIG_FILE );
+			if( !is_null( $db_conf ) ){
+				$xml = $this->asXML();
+				$save_obj = new self( $xml );
+				unset($save_obj->db_host);
+				unset($save_obj->db_name);
+				unset($save_obj->db_user);
+				unset($save_obj->db_pass);
+				$save_obj->asXML( $config );
+			}else{
+				$this->asXML( $config );
+			}
 		}
 	}
 }
