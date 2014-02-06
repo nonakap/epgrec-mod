@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<epgrec>
+    <db_host>localhost</db_host>
+    <db_name>yourdbname</db_name>
+    <db_user>yourname</db_user>
+    <db_pass>yourpassword</db_pass>
+</epgrec>
