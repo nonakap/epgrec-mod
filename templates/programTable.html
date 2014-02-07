@@ -347,7 +347,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
 <input type="hidden" name="rest_alert" value="{$rest_alert}">
 <input type="hidden" name="criterion_enab" value="{$criterion_enab}">
 <input type="hidden" name="smart_repeat" value="{$smart_repeat}">
-<b>検索語句:</b>(<input type="checkbox" name="use_regexp" value="1" {if $use_regexp}checked="checked"{/if}>正規表現 <input type="checkbox" name="ena_title" value="1" {if $ena_title}checked="checked"{/if}>タイトル <input type="checkbox" name="ena_desc" value="1" {if $ena_desc}checked="checked"{/if}>概要)<br>
+<b>検索語句:</b>(<input type="checkbox" id="use_regexp" name="use_regexp" value="1" {if $use_regexp}checked="checked"{/if}><label for="use_regexp">正規表現</label> <input type="checkbox" id="ena_title" name="ena_title" value="1" {if $ena_title}checked="checked"{/if}><label for="ena_title">タイトル</label> <input type="checkbox" id="ena_desc" name="ena_desc" value="1" {if $ena_desc}checked="checked"{/if}><label for="ena_desc">概要</label> <input type="checkbox" id="collate_ci" name="collate_ci" value="1" {if $collate_ci}checked="checked"{/if}><label for="collate_ci">全角半角同一視</label>)<br>
 <input type="text" name="search" value="{$search|escape}" class="example1"><br>
 <b>種別:</b>(
   {foreach from=$types item=type}
@@ -436,6 +436,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
   <b>語句:</b>{if $search == null}なし{else}{$search|escape}{/if}
   <b>　正規表現:</b>{if $use_regexp}使う{else}使わない{/if}
   <b>　検索対象:</b>{if $ena_title}タイトル{/if}{if $ena_desc}{if $ena_title}+{/if}概要{/if}
+  <b>　全角半角同一視:</b>{if $collate_ci}する{else}しない{/if}
   <br><b>種別:</b>{$type_names}
   <b>　局:</b>{if $k_station == 0}すべて{else}{$k_station_name}{/if}
   <b>　ジャンル({if $first_genre == 1}第一{else}全保持{/if}):</b>{if $k_category == 0}すべて{else}{$k_category_name}{/if}

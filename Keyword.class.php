@@ -22,6 +22,7 @@ class Keyword extends DBRecord {
 									$use_regexp = false,
 									$ena_title = FALSE,
 									$ena_desc = FALSE,
+									$collate_ci = FALSE,
 									$typeGR = FALSE,
 									$typeBS = FALSE,
 									$typeCS = FALSE,
@@ -62,6 +63,8 @@ class Keyword extends DBRecord {
 					if( $key[0]==='"' && $k_len>2 && $key[$k_len-1]==='"' )
 						$key = substr( $key, 1, $k_len-2 );
 					$options .= "'%".mysql_real_escape_string( $key )."%'";
+					if ( $collate_ci )
+						$options .= ' COLLATE utf8_unicode_ci';
 				}
 			}
 		}

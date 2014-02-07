@@ -33,6 +33,7 @@ $search = '';
 $use_regexp = 0;
 $ena_title  = FALSE;
 $ena_desc   = FALSE;
+$collate_ci = FALSE;
 $typeGR      = TRUE;
 $typeBS      = TRUE;
 $typeCS      = TRUE;
@@ -65,6 +66,7 @@ if(isset( $_POST['do_search'] )) {
 		$use_regexp = isset($_POST['use_regexp']);
 		$ena_title  = isset($_POST['ena_title']);
 		$ena_desc   = isset($_POST['ena_desc']);
+		$collate_ci = isset($_POST['collate_ci']);
 	}
 	$typeGR = isset($_POST['typeGR']);
 	$typeBS = isset($_POST['typeBS']);
@@ -177,6 +179,10 @@ if(isset( $_POST['do_search'] )) {
 				$ena_desc = (boolean)$_GET['ena_desc'];
 			}else
 				$ena_desc = FALSE;
+			if( isset($_GET['collate_ci'])){
+				$collate_ci = (boolean)$_GET['collate_ci'];
+			}else
+				$collate_ci = TRUE;
 			$do_keyword = 1;
 		}
 		if( isset($_GET['station'])) {
@@ -240,8 +246,8 @@ if( $weekofday == 0 )
 try{
 	$programs = array();
 if( $do_keyword ){
-	$precs = Keyword::search( $search, $use_regexp, $ena_title, $ena_desc, $typeGR, $typeBS, $typeCS, $typeEX, $category_id, $channel_id, $weekofday, $prgtime, $period, $sub_genre, $first_genre );
-	
+	$precs = Keyword::search( $search, $use_regexp, $ena_title, $ena_desc, $collate_ci, $typeGR, $typeBS, $typeCS, $typeEX, $category_id, $channel_id, $weekofday, $prgtime, $period, $sub_genre, $first_genre );
+
 	foreach( $precs as $p ) {
 	try{
 		$ch  = new DBRecord(CHANNEL_TBL, 'id', $p->channel_id );
@@ -469,6 +475,7 @@ EXIT_REV:;
 	$smarty->assign( 'use_regexp', $use_regexp );
 	$smarty->assign( 'ena_title', $ena_title );
 	$smarty->assign( 'ena_desc', $ena_desc );
+	$smarty->assign( 'collate_ci', $collate_ci );
 	$smarty->assign( 'stations', $stations );
 	$smarty->assign( 'k_station', $channel_id );
 	$smarty->assign( 'k_station_name', $k_station_name );
