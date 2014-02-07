@@ -391,17 +391,21 @@ function putProgramHtml( $src, $type, $channel_id, $genre, $sub_genre ){
 			$out_title = substr( $temp, 5 );
 		}else
 			$out_title = $temp;
-		if( strpos( $out_title, ' #' ) === FALSE ){
-			$delimiter = strpos( $out_title, '「' )===FALSE ? "" : '「';
-		}else
+		if( strpos( $out_title, ' #' ) !== FALSE ){
 			$delimiter = ' #';
+		}else if( strpos( $out_title, '「' ) !== FALSE ){
+			$delimiter = '「';
+		}else{
+			$delimiter = '';
+		}
 		if( $delimiter !== "" ){
 			$keyword = explode( $delimiter, $out_title );
 			if( $keyword[0] === "" )
 				$keyword[0] = $out_title;
 		}else
 			$keyword[0] = $out_title;
-		return 'programTable.php?search='.rawurlencode(str_replace( ' ', '%', $keyword[0] )).'&type='.$type.'&station='.$channel_id.'&category_id='.$genre.'&sub_genre='.$sub_genre;
+		$keyword[0] = preg_replace( '/\p{Zs}*第[0-9０-９]+([.．][0-9０-９]+)?話\p{Zs}*/u', '', $keyword[0], 1 );
+		return 'programTable.php?search='.rawurlencode( preg_replace( '/ +/', '%', $keyword[0] ) ).'&type='.$type.'&station='.$channel_id.'&category_id='.$genre.'&sub_genre='.$sub_genre;
 	}else
 		return "";
 }
