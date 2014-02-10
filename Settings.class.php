@@ -24,6 +24,12 @@ class Settings extends SimpleXMLElement {
 				$obj->save();
 			}
 
+			// 録画ファイル別ディレクトリ
+			if( $obj->exists("alt_spool") == 0 ){
+				$obj->alt_spool = "";
+				$obj->save();
+			}
+
 			// DB設定ファイル
 			self::load_db_conf( $obj );
 
@@ -125,6 +131,9 @@ class Settings extends SimpleXMLElement {
 
 			// CS録画
 			$xml->cs_rec_flg = 0;
+
+			// 録画ファイル別ディレクトリ
+			$xml->alt_spool = "";
 
 			// DB設定ファイル
 			self::load_db_conf( $xml );

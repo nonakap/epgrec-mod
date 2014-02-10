@@ -173,7 +173,7 @@ table#reservation_table td.tuner3 {border: solid thick yellow; border-collapse: 
 </select>
 </form></h2>
 
-{if $ts_rate }<div><div style="text-align: right;">録画ストレージ残容量 {$free_size}GB  およそ{$free_time}分({$ts_rate}MB/min)</div></div>{/if}
+{if $ts_rate }<div><div style="text-align: right;">録画ストレージ残容量 {$free_size}GB  およそ{$free_time}分({$ts_rate}MB/min)</div>{if $use_alt_spool }<div style="text-align: right;">別録画ストレージ残容量 {$alt_free_size}GB  およそ{$alt_free_time}分</div>{/if}</div>{/if}
 
 {if count($reservations)}
 <table id="reservation_table">

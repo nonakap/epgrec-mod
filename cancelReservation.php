@@ -18,9 +18,11 @@ if(isset($_GET['reserve_id'])) {
 		if( isset( $_GET['delete_file'] ) ) {
 			if( $_GET['delete_file'] == 1 ) {
 				// ファイルを削除
-				if( file_exists( INSTALL_PATH.'/'.$settings->spool.'/'.$rec->path ) ) {
-					@unlink(INSTALL_PATH.'/'.$settings->spool.'/'.$rec->path);
-					@unlink(INSTALL_PATH.'/'.$settings->thumbs.'/'.array_pop(explode( '/', $rec->path )).'.jpg');
+				$filename = .pathinfo( $rec->path,  PATHINFO_BASENAME );
+				@unlink( INSTALL_PATH.'/'.$settings->spool.'/'.$rec->path );
+				@unlink( INSTALL_PATH.'/'.$settings->thumbs.'/'.$filename.'.jpg' );
+				if( is_alt_spool_writable() ){
+					@unlink( $settings->alt_spool.'/'.$filename );
 				}
 			}
 		}

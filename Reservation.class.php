@@ -4,6 +4,7 @@ include_once( INSTALL_PATH . '/DBRecord.class.php' );
 include_once( INSTALL_PATH . '/reclib.php' );
 include_once( INSTALL_PATH . '/Settings.class.php' );
 include_once( INSTALL_PATH . '/recLog.inc.php' );
+include_once( INSTALL_PATH . '/util.php' );
 
 
 // 予約クラス
@@ -848,21 +849,39 @@ LOG_THROW:;
 
 		// 旧動画ファイル名
 		$oldoutput = INSTALL_PATH.$settings->spool.'/'.$rec->path;
-		if ( !is_readable ( $oldoutput ) ){
-			$oldoutput = null;
+		if ( !is_readable( $oldoutput ) ){
 			$tmp_replace_title = '##'.md5( $newoutput ).'##';
 			$wfilename = preg_replace( '/'.$title.'/', $tmp_replace_title, $newoutput, 1 );
 			$wfilename = preg_replace( '/[[*?]/', '\\\\$0', $wfilename );
 			$wfilename = preg_replace( '/'.$tmp_replace_title.'/', '*', $wfilename, 1 );
 			$files = glob( $wfilename, GLOB_NOSORT );
-			if ( $files !== false && count( $files ) == 1 && strlen( $files[0] ) > 0 && is_readable( $files[0] ) ){
-				$oldoutput = $files[0];
+			if ( $files !== false && count( $files ) > 0 ){
+				$oldoutput = null;
+				if( count( $files ) == 1 && strlen( $files[0] ) > 0 && is_readable( $files[0] ) ){
+					$oldoutput = $files[0];
+				}
+			}else{
+				if( use_alt_spool() ){
+					$newoutput = $settings->alt_spool.'/'.$filename;
+					$oldoutput = $settings->alt_spool.'/'.pathinfo( $rec->path, PATHINFO_BASENAME );
+					if ( !is_readable( $oldoutput ) ){
+						$oldoutput = null;
+						$tmp_replace_title = '##'.md5( $newoutput ).'##';
+						$wfilename = preg_replace( '/'.$title.'/', $tmp_replace_title, $newoutput, 1 );
+						$wfilename = preg_replace( '/[[*?]/', '\\\\$0', $wfilename );
+						$wfilename = preg_replace( '/'.$tmp_replace_title.'/', '*', $wfilename, 1 );
+						$files = glob( $wfilename, GLOB_NOSORT );
+						if ( $files !== false && count( $files ) == 1 && strlen( $files[0] ) > 0 && is_readable( $files[0] ) ){
+							$oldoutput = $files[0];
+						}
+					}
+				}
 			}
 		}
 
 		// 旧サムネイルファイル名
-		$oldthumb = INSTALL_PATH.$settings->thumbs.'/'.array_pop(explode('/', $rec->path)).'.jpg';
-		if ( !is_readable ( $oldthumb ) ){
+		$oldthumb = INSTALL_PATH.$settings->thumbs.'/'.pathinfo( $rec->path, PATHINFO_BASENAME ).'.jpg';
+		if ( !is_readable( $oldthumb ) ){
 			$oldthumb = null;
 			$tmp_replace_title = '##'.md5( $newthumb ).'##';
 			$wthumbname = preg_replace( '/'.$title.'/', $tmp_replace_title, $newthumb, 1 );

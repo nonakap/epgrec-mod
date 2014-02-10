@@ -113,8 +113,8 @@ table#extinct_ch_table td.rec_id {display: none;}
 <div>背景色が赤のストレージは、書き込みが出来ない可能性が高いです。</div>
 <table id="storage_table">
  <tr>
-  <th>DEVICE名</th>
-  <th>PATH</th>
+  <th>デバイス名</th>
+  <th>パス</th>
   <th>所有者</th>
   <th>グループ</th>
   <th>パーミッション</th>
@@ -122,22 +122,22 @@ table#extinct_ch_table td.rec_id {display: none;}
   <th>残時間({$ts_rate}MB/min)</th>
  </tr>
  <tr>
-  <td>全録画ストレージ</td>
+  <td>録画ストレージ</td>
   <td style="text-align: left;">{$spool_disks[0].path}</td>
   <td>---</td>
   <td>---</td>
-  <td>-----</td>
+  <td>------</td>
   <td style="text-align: right;">{$free_size}GB</td>
   <td style="text-align: right;">{$free_time}</td>
  </tr>
 {foreach from=$spool_disks item=disk}
- <tr id="stid_{$disk.dev}" {if $disk.wrtbl=='0'}style="background-color: red"{/if}>
+ <tr id="stid_{$disk.dev}" {if $disk.writable=='0'}style="background-color: red"{/if}>
   <td style="text-align: left;">{$disk.dname}</td>
   <td style="text-align: left;">{$disk.path}</td>
   <td>{$disk.owner}</td>
-  <td>{$disk.grupe}</td>
+  <td>{$disk.group}</td>
   <td>{$disk.perm}</td>
-  <td style="text-align: right;">{$disk.size}GB</td>
+  <td style="text-align: right;">{$disk.hsize}GB</td>
   <td style="text-align: right;">{$disk.time}</td>
  </tr>
 {/foreach}

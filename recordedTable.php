@@ -2,9 +2,10 @@
 include_once('config.php');
 include_once( INSTALL_PATH . '/DBRecord.class.php' );
 include_once( INSTALL_PATH . '/Smarty/Smarty.class.php' );
-include_once( INSTALL_PATH . '/Settings.class.php' );
 include_once( INSTALL_PATH . '/reclib.php' );
+include_once( INSTALL_PATH . '/Settings.class.php' );
 include_once( INSTALL_PATH . '/settings/menu_list.php' );
+include_once( INSTALL_PATH . '/util.php' );
 
 $settings = Settings::factory();
 
@@ -84,19 +85,34 @@ try{
 		$end_time   = toTimestamp($r->endtime);
 		$arr['starttime'] = date( 'Y/m/d(', $start_time ).$week_tb[date( 'w', $start_time )].')<br>'.date( 'H:i:s', $start_time );
 		$arr['duration']  = date( 'H:i:s', $end_time-$start_time-9*60*60 );
+		$movie_found = false;
 		$moviepath = INSTALL_PATH.$settings->spool.'/'.$r->path;
-		if ( is_readable( $moviepath ) ){
-			$arr['asf'] = ''.$settings->install_url.'/viewer.php?reserve_id='.$r->id;
+		$moviefile = pathinfo( $r->path, PATHINFO_BASENAME );
+		if( !@is_dir( $moviepath ) && @is_readable( $moviepath ) ){
+			$movie_found = true;
+			$arr['spool'] = 'main';
+		}else
+		if( use_alt_spool() ){
+			$altmoviepath = $settings->alt_spool.'/'.$moviefile;
+			if( !@is_dir( $altmoviepath ) && @is_readable( $altmoviepath ) ){
+				$movie_found = true;
+				$arr['spool'] = 'alt';
+			}
+		}
+		if( $movie_found ){
+			$arr['asf'] = $settings->install_url.'/viewer.php?reserve_id='.$r->id;
 		}else{
 			$arr['asf'] = '';
+			$arr['spool'] = '';
 		}
 		$arr['title'] = htmlspecialchars($r->title,ENT_QUOTES);
 		$arr['description'] = htmlspecialchars($r->description,ENT_QUOTES);
-		$thumbpath = INSTALL_PATH.$settings->thumbs.'/'.array_pop(explode( '/', $r->path )).".jpg";
+		$thumbfile = $moviefile.'.jpg';
+		$thumbpath = INSTALL_PATH.$settings->thumbs.'/'.$thumbfile;
 		if ( is_readable( $thumbpath ) ){
-			$arr['thumb'] = "<img src=\"".$settings->install_url.$settings->thumbs.'/'.rawurlencode(array_pop(explode( '/', $r->path ))).".jpg\" />";
+			$arr['thumb'] = '<img src="'.$settings->install_url.$settings->thumbs.'/'.rawurlencode($thumbfile).'" />';
 		}else{
-			$arr['thumb'] = "-";
+			$arr['thumb'] = '-';
 		}
 		$arr['cat'] = $cat->name_en;
 		$arr['mode'] = $RECORD_MODE[$r->mode]['name'];
@@ -106,7 +122,7 @@ try{
 			$arr['key_id'] = 0;
 		array_push( $records, $arr );
 	}
-	
+
 	$crecs = DBRecord::createRecords(CATEGORY_TBL );
 	$cats = array();
 	$cats[0]['id'] = 0;
@@ -119,7 +135,7 @@ try{
 		$arr['selected'] = $c->id == $category_id ? 'selected' : "";
 		array_push( $cats, $arr );
 	}
-	
+
 	$stations = array();
 	$stations[0]['id'] = 0;
 	$stations[0]['name'] = 'すべて';
@@ -148,7 +164,23 @@ try{
 		$arr['selected'] = $station == $c->id ? 'selected' : "";
 		array_push( $stations, $arr );
 	}
-	
+
+	// スプール空き容量
+	$free_spaces = get_spool_free_space();
+	$free_size = $free_spaces['free_hsize'];
+	$free_time = $free_spaces['free_time'];
+	$ts_stream_rate = $free_spaces['ts_stream_rate'];
+	if( use_alt_spool() ){
+		$spool_disks = $free_spaces['spool_disks'];
+		foreach( $spool_disks as $disk ){
+			if( $disk['name'] === 'alt' && $disk['path'] === (string)$settings->alt_spool ){
+				$alt_free_size = $disk['hsize'];
+				$alt_free_time = $disk['time'];
+				break;
+			}
+		}
+	}
+
 	$link_add = '';
 	if( (int)$settings->gr_tuners > 0 )
 		$link_add .= '<option value="index.php">地上デジタル番組表</option>';
@@ -160,7 +192,6 @@ try{
 	if( EXTRA_TUNERS )
 		$link_add .= '<option value="index.php?type=EX">'.EXTRA_NAME.'番組表</option>';
 
-
 	$smarty = new Smarty();
 	$smarty->assign('sitetitle','録画済一覧');
 	$smarty->assign( 'records', $records );
@@ -168,11 +199,18 @@ try{
 	$smarty->assign( 'stations', $stations );
 	$smarty->assign( 'cats', $cats );
 	$smarty->assign( 'use_thumbs', $settings->use_thumbs );
+	$smarty->assign( 'spool', (string)$settings->spool );
+	$smarty->assign( 'free_size', $free_size );
+	$smarty->assign( 'free_time', $free_time );
+	$smarty->assign( 'ts_rate', $ts_stream_rate );
+	$smarty->assign( 'use_alt_spool', isset( $alt_free_size ) && isset( $alt_free_time ) );
+	$smarty->assign( 'alt_spool', (string)$settings->alt_spool );
+	$smarty->assign( 'alt_spool_writable', is_alt_spool_writable() );
+	$smarty->assign( 'alt_free_size', isset( $alt_free_size ) ? $alt_free_size : 0 );
+	$smarty->assign( 'alt_free_time', isset( $alt_free_time ) ? $alt_free_time : 0 );
 	$smarty->assign( 'link_add', $link_add );
 	$smarty->assign( 'menu_list', $MENU_LIST );
 	$smarty->display('recordedTable.html');
-	
-	
 }
 catch( exception $e ) {
 	exit( $e->getMessage() );

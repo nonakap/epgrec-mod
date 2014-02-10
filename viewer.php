@@ -1,15 +1,16 @@
 <?php
-header("Expires: Thu, 01 Dec 1994 16:00:00 GMT");
-header("Last-Modified: ". gmdate("D, d M Y H:i:s"). " GMT");
-header("Cache-Control: no-cache, must-revalidate");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
+header('Expires: Thu, 01 Dec 1994 16:00:00 GMT');
+header('Last-Modified: '. gmdate("D, d M Y H:i:s"). ' GMT');
+header('Cache-Control: no-cache, must-revalidate');
+header('Cache-Control: post-check=0, pre-check=0', false);
+header('Pragma: no-cache');
 
 
 include_once("config.php");
 include_once(INSTALL_PATH . "/DBRecord.class.php" );
 include_once(INSTALL_PATH . "/reclib.php" );
 include_once(INSTALL_PATH . "/Settings.class.php" );
+include_once(INSTALL_PATH . "/util.php" );
 
 $settings = Settings::factory();
 
@@ -28,27 +29,41 @@ try{
 	$dm = $duration / 60;
 	$duration = $duration % 60;
 	$ds = $duration;
-	
+
 	$title = htmlspecialchars(str_replace(array("\r\n","\r","\n"), '', $rrec->title),ENT_QUOTES);
 	$abstract = htmlspecialchars(str_replace(array("\r\n","\r","\n"), '', $rrec->description),ENT_QUOTES);
-	
-	header("Content-type: video/x-ms-asf; charset=\"UTF-8\"");
-	header('Content-Disposition: inline; filename="'.$rrec->path.'.asx"');
-	echo "<ASX version = \"3.0\">";
-	echo "<PARAM NAME = \"Encoding\" VALUE = \"UTF-8\" />";
-	echo "<ENTRY>";
-	if( ! $rrec->complete ) echo "<REF HREF=\"".$settings->install_url."/sendstream.php?reserve_id=".$rrec->id ."\" />";
-	$paths = explode( '/', $rrec->path );
-	$path = "";
-	foreach( $paths as $part )
-		$path .= '/'.rawurlencode( $part );
-	echo "<REF HREF=\"".$settings->install_url.$settings->spool.$path."\" />";
-	echo "<TITLE>".$title."</TITLE>";
-	echo "<ABSTRACT>".$abstract."</ABSTRACT>";
-	echo "<DURATION VALUE=";
+	$filename = pathinfo( $rrec->path, PATHINFO_BASENAME );
+
+	header('Content-type: video/x-ms-asf; charset="UTF-8"');
+	header('Content-Disposition: inline; filename="'.$filename.'.asx"');
+	echo '<ASX version = "3.0">';
+	echo '<PARAM NAME = "Encoding" VALUE = "UTF-8" />';
+	echo '<ENTRY>';
+	$use_streaming = false;
+	if( !$rrec->complete ){
+		$use_streaming = true;
+	}else
+	if( use_alt_spool() ){
+		$altmoviepath = $settings->alt_spool.'/'.$filename;
+		if( !@is_dir( $altmoviepath ) && @is_readable( $altmoviepath ) ){
+			$use_streaming = true;
+		}
+	}
+	if( $use_streaming ){
+		echo '<REF HREF="'.$settings->install_url.'/sendstream.php?reserve_id='.$rrec->id .'" />';
+	}else{
+		$paths = explode( '/', $rrec->path );
+		$path = '';
+		foreach( $paths as $part )
+			$path .= '/'.rawurlencode( $part );
+		echo '<REF HREF="'.$settings->install_url.$settings->spool.$path.'" />';
+	}
+	echo '<TITLE>'.$title.'</TITLE>';
+	echo '<ABSTRACT>'.$abstract.'</ABSTRACT>';
+	echo '<DURATION VALUE=';
 	echo '"'.sprintf( "%02d:%02d:%02d",$dh, $dm, $ds ).'" />';
-	echo "</ENTRY>";
-	echo "</ASX>";
+	echo '</ENTRY>';
+	echo '</ASX>';
 }
 catch(exception $e ) {
 	exit( $e->getMessage() );

@@ -5,20 +5,15 @@ include_once( INSTALL_PATH . '/Smarty/Smarty.class.php' );
 include_once( INSTALL_PATH . '/reclib.php' );
 include_once( INSTALL_PATH . '/Settings.class.php' );
 include_once( INSTALL_PATH . '/settings/menu_list.php' );
+include_once( INSTALL_PATH . '/util.php' );
 
 $week_tb = array( '日', '月', '火', '水', '木', '金', '土' );
 
-
-function rate_time( $minute )
-{
-	$minute /= TS_STREAM_RATE;
-	return sprintf( '%dh%02dm', $minute/60, $minute%60 );
-}
-
 try{
-	$rvs = DBRecord::createRecords(RESERVE_TBL, "WHERE complete='0' ORDER BY starttime ASC" );
-	
+	$settings = Settings::factory();
+
 	$reservations = array();
+	$rvs = DBRecord::createRecords(RESERVE_TBL, "WHERE complete='0' ORDER BY starttime ASC" );
 	foreach( $rvs as $r ) {
 		$end_time = toTimestamp($r->endtime);
 		if( $end_time < time() ){
@@ -58,63 +53,21 @@ try{
 		$arr['keyword'] = putProgramHtml( $arr['title'], $r->type, $r->channel_id, $r->category_id, $sub_genre );
 		array_push( $reservations, $arr );
 	}
-	$settings    = Settings::factory();
-	$spool_path  = INSTALL_PATH.$settings->spool;
-	$spool_disks = array();
-	if( !defined( 'KATAUNA' ) ){
-		// ストレージ空き容量取得
-		$ts_stream_rate = TS_STREAM_RATE;
-		// 全ストレージ空き容量取得
-		$root_mega = $free_mega = (int)( disk_free_space( $spool_path ) / ( 1024 * 1024 ) );
-		// スプール･ルート･ストレージの空き容量保存
-		$stat  = stat( $spool_path );
-		$dvnum = (int)$stat['dev'];
-		$spool_disks = array();
-		$arr = array();
-		$arr['dev']   = $dvnum;
-		$arr['dname'] = get_device_name( $dvnum );
-		$arr['path']  = $settings->spool;
-//		$arr['link']  = 'spool root';
-		$arr['size']  = number_format( $root_mega/1024, 1 );
-		$arr['time']  = rate_time( $root_mega );
-		array_push( $spool_disks, $arr );
-		$devs = array( $dvnum );
-		// スプール･ルート上にある全ストレージの空き容量取得
-		$files = scandir( $spool_path );
-		if( $files !== FALSE ){
-			array_splice( $files, 0, 2 );
-			foreach( $files as $entry ){
-				$entry_path = $spool_path.'/'.$entry;
-				if( is_link( $entry_path ) && is_dir( $entry_path ) ){
-					$stat  = stat( $entry_path );
-					$dvnum = (int)$stat['dev'];
-					if( !in_array( $dvnum, $devs ) ){
-						$entry_mega   = (int)( disk_free_space( $entry_path ) / ( 1024 * 1024 ) );
-						$free_mega   += $entry_mega;
-						$arr = array();
-						$arr['dev']   = $dvnum;
-						$arr['dname'] = get_device_name( $dvnum );
-						$arr['path']  = $settings->spool.'/'.$entry;
-//						$arr['link']  = readlink( $entry_path );
-						$arr['size']  = number_format( $entry_mega/1024, 1 );
-						$arr['time']  = rate_time( $entry_mega );
-						array_push( $spool_disks, $arr );
-						array_push( $devs, array( $dvnum ) );
-					}
-				}
+
+	// スプール空き容量
+	$free_spaces = get_spool_free_space();
+	$free_size = $free_spaces['free_hsize'];
+	$free_time = $free_spaces['free_time'];
+	$ts_stream_rate = $free_spaces['ts_stream_rate'];
+	if( use_alt_spool() ){
+		$spool_disks = $free_spaces['spool_disks'];
+		foreach( $spool_disks as $disk ){
+			if( $disk['name'] === 'alt' && $disk['path'] === (string)$settings->alt_spool ){
+				$alt_free_size = $disk['hsize'];
+				$alt_free_time = $disk['time'];
+				break;
 			}
 		}
-	}else{
-		$free_mega      = 0;
-		$ts_stream_rate = 0;
-		$arr = array();
-		$arr['dev']     = 0;
-		$arr['dname']   = 'unknown';
-		$arr['path']    = $spool_path;
-//	//	$arr['link']    = 'spool root';
-		$arr['size']    = number_format( $free_mega/1024, 1 );
-		$arr['time']    = rate_time( $free_mega );
-		array_push( $spool_disks, $arr );
 	}
 
 	$link_add = '';
@@ -131,9 +84,12 @@ try{
 	$smarty = new Smarty();
 	$smarty->assign( 'sitetitle','録画予約一覧');
 	$smarty->assign( 'reservations', $reservations );
-	$smarty->assign( 'free_size', number_format( $free_mega/1024, 1 ) );
-	$smarty->assign( 'free_time', rate_time( $free_mega ) );
+	$smarty->assign( 'free_size', $free_size );
+	$smarty->assign( 'free_time', $free_time );
 	$smarty->assign( 'ts_rate', $ts_stream_rate );
+	$smarty->assign( 'use_alt_spool', isset( $alt_free_size ) && isset( $alt_free_time ) ? 1 : 0 );
+	$smarty->assign( 'alt_free_size', isset( $alt_free_size ) ? $alt_free_size : 0 );
+	$smarty->assign( 'alt_free_time', isset( $alt_free_time ) ? $alt_free_time : 0 );
 	$smarty->assign( 'link_add', $link_add );
 	$smarty->assign( 'menu_list', $MENU_LIST );
 	$smarty->display('reservationTable.html');
