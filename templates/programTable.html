@@ -319,7 +319,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
 
 <body onLoad="change_subGenre({$k_category});selected_subGenre({$k_category},{$k_sub_genre})">
 
-<h2><form>
+<h2 id="pageTop"><form>
 {$sitetitle}
 <select onChange="popJump(this)">
 <option value="#">メニュー</option>
@@ -424,6 +424,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
  </tr>
 {/foreach}
 </table>
+<p><a href="#pageTop">ページトップへ戻る</a></p>
 {else}
   該当する番組はありません
 {/if}
