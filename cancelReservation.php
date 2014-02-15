@@ -18,7 +18,7 @@ if(isset($_GET['reserve_id'])) {
 		if( isset( $_GET['delete_file'] ) ) {
 			if( $_GET['delete_file'] == 1 ) {
 				// ファイルを削除
-				$filename = .pathinfo( $rec->path,  PATHINFO_BASENAME );
+				$filename = pathinfo( $rec->path,  PATHINFO_BASENAME );
 				@unlink( INSTALL_PATH.'/'.$settings->spool.'/'.$rec->path );
 				@unlink( INSTALL_PATH.'/'.$settings->thumbs.'/'.$filename.'.jpg' );
 				if( is_alt_spool_writable() ){
