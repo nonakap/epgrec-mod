@@ -32,7 +32,7 @@ function _set_user_group_perm( &$arr, $stat )
 
 	$user_stat = posix_getpwuid( $euid );
 	$user_name = $user_stat['name'];
-	$is_owner = $uid === $euid || $uname === 'root';
+	$is_owner = $uid === $euid || $user_name === 'root';
 	$arr['owner'] = $is_owner ? $user_name : '****';
 	$group_stat = posix_getgrgid( $gid );
 	$group_name = $group_stat['name'];
