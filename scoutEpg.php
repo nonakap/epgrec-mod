@@ -14,7 +14,7 @@
 
 function search_getepg()
 {
-	$ps_output = shell_exec( PS_CMD." 2>/dev/null" );
+	$ps_output = shell_exec( PS_CMD.' 2>/dev/null' );
 	$rarr = explode( "\n", $ps_output );
 	$catch_cmd = INSTALL_PATH.'/getepg.php';
 	for( $cc=0; $cc<count($rarr); $cc++ ){
@@ -57,7 +57,7 @@ function sig_handler()
 	if( !isset( $disc ) ){
 		// シグナルハンドラを設定
 		declare( ticks = 1 );
-		pcntl_signal( SIGTERM, "sig_handler" );
+		pcntl_signal( SIGTERM, 'sig_handler' );
 	}
 
 	if( isset( $disc ) || $argc!=2 ){
@@ -65,10 +65,10 @@ function sig_handler()
 			$disc = $argv[1];
 			$mode = $argv[2];
 		}
-		$rev    = new DBRecord( CHANNEL_TBL, "channel_disc", $disc );
+		$rev    = new DBRecord( CHANNEL_TBL, 'channel_disc', $disc );
 		$lmt_tm = time() + ( $mode==1 ? FIRST_REC : SHORT_REC ) + $settings->rec_switch_time + $settings->former_time + 2;
 	}else{
-		$rev    = new DBRecord( RESERVE_TBL, "id", $argv[1] );
+		$rev    = new DBRecord( RESERVE_TBL, 'id', $argv[1] );
 		$lmt_tm = toTimestamp( $rev->starttime ) - $settings->rec_switch_time - $settings->former_time - 2;
 	}
 	$type     = $rev->type;		//GR/BS/CS
@@ -81,18 +81,18 @@ function sig_handler()
 
 	if( $type === 'GR' ){
 		$smf_type = 'GR';
-		$sql_type = "type = 'GR'";
+		$sql_type = 'type=\'GR\'';
 		$smf_key  = SEM_GR_START;
 		$tuners   = (int)$settings->gr_tuners;
 	}else{
 		if( $type === 'EX' ){
 			$smf_type = 'EX';
-			$sql_type = "type = 'EX'";
+			$sql_type = 'type=\'EX\'';
 			$smf_key  = SEM_EX_START;
 			$tuners   = EXTRA_TUNERS;
 		}else{
 			$smf_type = 'BS';
-			$sql_type = "(type = 'BS' OR type = 'CS')";
+			$sql_type = '(type=\'BS\' OR type=\'CS\')';
 			$smf_key  = SEM_ST_START;
 			$tuners   = (int)$settings->bs_tuners;
 		}
@@ -148,7 +148,7 @@ if( search_getepg() === FALSE ){
 				}
 			break;
 		}
-		$sql_cmd    = "WHERE complete = '0' AND ".$sql_type.' AND endtime > subtime( now(), sec_to_time('.($settings->extra_time+2).') ) AND starttime < addtime( now(), sec_to_time('.$epg_tm.') )';
+		$sql_cmd    = 'WHERE complete=0 AND '.$sql_type.' AND endtime>subtime( now(), sec_to_time('.($settings->extra_time+2).') ) AND starttime<addtime( now(), sec_to_time('.$epg_tm.') )';
 		$off_tuners = DBRecord::countRecords( RESERVE_TBL, $sql_cmd );
 		if( $off_tuners < $tuners ){
 			//空チューナー降順探索
@@ -177,7 +177,7 @@ if( search_getepg() === FALSE ){
 							|| ( $type==='EX' && $EX_TUNERS_CHARA[$slc_tuner]['epgTs'] ) )
 							$cmdline = 'SID=epg ';
 						else
-							$cmdline = "";
+							$cmdline = '';
 						$cmdline .= 'CHANNEL='.$value.' DURATION='.$rec_tm.' TYPE='.$type.' TUNER_UNIT='.TUNER_UNIT1.' TUNER='.$slc_tuner.' MODE=0 OUTPUT='.$temp_ts.' '.DO_RECORD.' >/dev/null 2>&1';
 						exec( $cmdline );
 						//チューナー占有解除

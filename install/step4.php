@@ -77,7 +77,7 @@ $gr_oth = $GR_tuners - $gr_pt1;
 $bs_oth = $BS_tuners - $bs_pt1;
 if( $gr_pt1>0 || $bs_pt1>0 ){
 	if( $gr_oth && $tmpdrive_size<=(GR_OTH_EPG_SIZE+GR_XML_SIZE) || $bs_oth && $tmpdrive_size<=(BS_OTH_EPG_SIZE+BS_XML_SIZE) ){
-		reclog( 'shepherd.php::テンポラリー容量が不十分なためEPG更新が出来ません。空き容量を確保してください。', EPGREC_ERR );
+		echo 'step4.php::テンポラリー容量が不十分なためEPG更新が出来ません。空き容量を確保してください。';
 		exit();
 	}
 	$gr_work_size = $gr_oth || $gr_pt1 ? GR_OTH_EPG_SIZE * $gr_oth + GR_PT1_EPG_SIZE * $gr_pt1 + GR_XML_SIZE : 0;
@@ -114,14 +114,14 @@ if( $gr_pt1>0 || $bs_pt1>0 ){
 	$bs_tmp = array( 0, 3, 4, 6 );
 	if( $BS_tuners > 0 ){
 		if( $tune_cnts < 3 ){
-			echo 'shepherd.php::テンポラリー容量が不十分なため衛星波のEPG更新が出来ません。空き容量を確保してください。';
+			echo 'step4.php::テンポラリー容量が不十分なため衛星波のEPG更新が出来ません。空き容量を確保してください。';
 			exit();
 		}else{
 			if( $tune_cnts == 3 ){
 				$gr_bs_para = TRUE;
 				$gr_use = $GR_tuners>3 ? 3 : $GR_tuners;
 				$bs_use = 1;
-				reclog( 'shepherd.php::テンポラリー容量が不十分なため地上波･衛星波並列受信が出来ません。空き容量を確保してください。', EPGREC_WARN );
+				echo "step4.php::テンポラリー容量が不十分なため地上波･衛星波並列受信が出来ません。空き容量を確保してください。\n";
 			}else{
 				if( $GR_tuners > 0 ){
 					if( $bs_tmp[$bs_max]+$GR_tuners > $tune_cnts ){
@@ -216,7 +216,7 @@ $ <?php echo INSTALL_PATH; ?>/getepg.php [Enter]
 
 <p>EPG受信後、EPG受信の自動実行をshepherd.phpにて行う場合は、上記説明中の"getepg"を"shepherd"に置き換えてお読みください。</p>
 
-<p>＜注意事項＞<br>
+<?php if( $gr_oth>0 || $bs_oth>0 ) echo "<p>＜注意事項＞<br>
 当スクリプトは、全チューナーを総動員してEPG受信を行います。<br>
 録画コマンドでEPG用TS出力が出来ない場合は、テンポラリーを大量消費します。<br>
 テンポラリーが不足する場合、それに応じて同時受信数を減らしますがEPG取得完了が遅くなります。<br>
@@ -224,7 +224,7 @@ $ <?php echo INSTALL_PATH; ?>/getepg.php [Enter]
 2枚挿しの場合は地上波のみ680MB・地上波+BS 1190MB・地上波+BS+CS 1700MBとなります。<br>
 (衛星波のEPG受信は最大3チューナーまでしか使用しませんので若干減ります。)<br>
 地デジ10局+BS+CSを同時受信する場合は、2720MB使用します。<br>
-十分なテンポラリーを確保した環境下での最短受信時間は、<?php echo $shepherd_th_tm; ?>分です。</p>
+十分なテンポラリーを確保した環境下での最短受信時間は、$shepherd_th_tm分です。</p>"; ?>
 
 <a href="step5.php?script=/shepherd.php&amp;time=<?php echo $shepherd_tm; ?>">このリンクをクリックすると並列受信EPG取得スクリプト"shepherd.php"にてEPGの初回受信を開始します。</a>
 </body>

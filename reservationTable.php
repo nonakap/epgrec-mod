@@ -15,50 +15,95 @@ function rate_time( $minute )
 	return sprintf( '%dh%02dm', $minute/60, $minute%60 );
 }
 
+$page      = 1;
+$full_mode = FALSE;
+
 try{
-	$rvs = DBRecord::createRecords(RESERVE_TBL, "WHERE complete='0' ORDER BY starttime ASC" );
-	
-	$reservations = array();
-	foreach( $rvs as $r ) {
-		$end_time = toTimestamp($r->endtime);
-		if( $end_time < time() ){
-			$r->complete = 1;
-			$r->update();
-			continue;
+	$res_obj = new DBRecord( RESERVE_TBL );
+	$rvs     = $res_obj->fetch_array( null, null, 'complete=0 ORDER BY starttime ASC' );
+	$res_cnt = count( $rvs );
+
+	if( ( SEPARATE_RECORDS_RESERVE===FALSE && SEPARATE_RECORDS<1 ) || ( SEPARATE_RECORDS_RESERVE!==FALSE && SEPARATE_RECORDS_RESERVE<1 ) )	// "<1"にしているのはフェイルセーフ
+		$full_mode = TRUE;
+	else{
+		if( isset( $_GET['page']) ){
+			if( $_GET['page'] === '-' )
+				$full_mode = TRUE;
+			else
+				$page = (int)$_GET['page'];
 		}
-		$ch  = new DBRecord(CHANNEL_TBL, 'id', $r->channel_id );
-		$cat = new DBRecord(CATEGORY_TBL, 'id', $r->category_id );
-		if( $r->program_id ){
-			try{
-				$prg = new DBRecord(PROGRAM_TBL, "id", $r->program_id );
-				$sub_genre = $prg->sub_genre;
-			}catch( exception $e ) {
-				reclog( 'reservationTable.php::予約ID:'.$r->id.'  '.$e->getMessage(), EPGREC_ERROR );
-				$sub_genre = 16;
+		$separate_records = SEPARATE_RECORDS_RESERVE!==FALSE ? SEPARATE_RECORDS_RESERVE : SEPARATE_RECORDS;
+		$view_overload    = VIEW_OVERLOAD_RESERVE!==FALSE ? VIEW_OVERLOAD_RESERVE : VIEW_OVERLOAD;
+		if( $res_cnt <= $separate_records+$view_overload )
+			$full_mode = TRUE;
+	}
+
+	if( $full_mode ){
+		$start_record = 0;
+		$end_record   = $res_cnt;
+	}else{
+		$start_record = ( $page - 1 ) * $separate_records;
+		$end_record   = $page * $separate_records;
+	}
+
+	$settings     = Settings::factory();
+	$reservations = array();
+	$ch_name      = array();
+	foreach( $rvs as $key => $r ){
+		$arr = array();
+		$end_time = toTimestamp($r['endtime']);
+		if( $end_time < time() ){
+			switch( at_clean( $r, $settings ) ){
+				case 0:
+					// 予約終了化(録画済一覧に終了状態を出すようにしたいね)
+					$wrt_set['complete'] = 1;
+					$rev_obj->force_update( $r['id'], $wrt_set );
+					continue;
+				case 1:	// トランスコード中
+					$arr['status'] = 1;
+					break;
+				case 2:	// 別ユーザーでAT登録
+					$arr['status'] = 2;
+					break;
 			}
 		}else
-			$sub_genre = 16;
-		$arr = array();
-		$arr['id'] = $r->id;
-		$arr['type'] = $r->type;
-		$arr['tuner'] = $r->tuner;
-		$arr['channel'] = $r->channel;
-		$arr['channel_name'] = $ch->name;
-		$start_time = toTimestamp($r->starttime);
-		$arr['date'] = date( 'm/d(', $start_time ).$week_tb[date( 'w', $start_time )].')';
-		$arr['starttime'] = date( 'H:i:s-', $start_time );
-		$arr['endtime'] = !$r->shortened ? date( 'H:i:s', $end_time ) : '<font color="#0000ff">'.date( 'H:i:s', $end_time ).'</font>';
-		$arr['duration'] = date( 'H:i:s', $end_time-$start_time-9*60*60 );
-		$arr['prg_top'] = date( 'YmdH', $start_time-60*60*1 );
-		$arr['mode'] = $RECORD_MODE[$r->mode]['name'];
-		$arr['title'] = $r->title;
-		$arr['description'] = $r->description;
-		$arr['cat'] = $cat->name_en;
-		$arr['autorec'] = $r->autorec ? $r->autorec : '□';
-		$arr['keyword'] = putProgramHtml( $arr['title'], $r->type, $r->channel_id, $r->category_id, $sub_genre );
-		array_push( $reservations, $arr );
+			$arr['status'] = 0;
+		if( $start_record<=$key && $key<$end_record ){
+			if( $r['program_id'] ){
+				try{
+					$prg = new DBRecord( PROGRAM_TBL, 'id', $r['program_id'] );
+					$sub_genre = $prg->sub_genre;
+				}catch( exception $e ) {
+					reclog( 'reservationTable.php::予約ID:'.$r['id'].'  '.$e->getMessage(), EPGREC_ERROR );
+					$sub_genre = 16;
+				}
+			}else
+				$sub_genre = 16;
+			$arr['id']      = $r['id'];
+			$arr['type']    = $r['type'];
+			$arr['tuner']   = $r['tuner'];
+			$arr['channel'] = $r['channel'];
+			if( !isset( $ch_name[$r['channel_id']] ) ){
+				$ch                        = new DBRecord( CHANNEL_TBL, 'id', $r['channel_id'] );
+				$ch_name[$r['channel_id']] = $ch->name;
+			}
+			$arr['channel_name'] = $ch_name[$r['channel_id']];
+			$start_time          = toTimestamp($r['starttime']);
+			$arr['date']         = date( 'm/d(', $start_time ).$week_tb[date( 'w', $start_time )].')';
+			$arr['starttime']    = date( 'H:i:s-', $start_time );
+			$arr['endtime']      = !$r['shortened'] ? date( 'H:i:s', $end_time ) : '<font color="#0000ff">'.date( 'H:i:s', $end_time ).'</font>';
+			$arr['duration']     = date( 'H:i:s', $end_time-$start_time-9*60*60 );
+			$arr['prg_top']      = date( 'YmdH', $start_time-60*60*1 );
+			$arr['mode']         = $RECORD_MODE[$r['mode']]['name'];
+			$arr['title']        = $r['title'];
+			$arr['description']  = $r['description'];
+			$arr['cat']          = $r['category_id'];
+			$arr['autorec']      = $r['autorec'] ? $r['autorec'] : '□';
+			$arr['keyword']      = putProgramHtml( $arr['title'], $r['type'], $r['channel_id'], $r['category_id'], $sub_genre );
+			array_push( $reservations, $arr );
+		}
 	}
-	$settings    = Settings::factory();
+
 	$spool_path  = INSTALL_PATH.$settings->spool;
 	$spool_disks = array();
 	if( !defined( 'KATAUNA' ) ){
@@ -111,7 +156,7 @@ try{
 		$arr['dev']     = 0;
 		$arr['dname']   = 'unknown';
 		$arr['path']    = $spool_path;
-//	//	$arr['link']    = 'spool root';
+//		$arr['link']    = 'spool root';
 		$arr['size']    = number_format( $free_mega/1024, 1 );
 		$arr['time']    = rate_time( $free_mega );
 		array_push( $spool_disks, $arr );
@@ -135,6 +180,7 @@ try{
 	$smarty->assign( 'free_time', rate_time( $free_mega ) );
 	$smarty->assign( 'ts_rate', $ts_stream_rate );
 	$smarty->assign( 'link_add', $link_add );
+	$smarty->assign( 'pager', $full_mode ? '' : make_pager( 'reservationTable.php', $separate_records, $res_cnt, $page ) );
 	$smarty->assign( 'menu_list', $MENU_LIST );
 	$smarty->display('reservationTable.html');
 }

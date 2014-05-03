@@ -46,7 +46,7 @@ function cleanup( $rarr, $cmd ){
 }
 
 	$shepherd_st = time();
-	$settings = Settings::factory();
+	$settings  = Settings::factory();
 	$GR_tuners = (int)$settings->gr_tuners;
 	$BS_tuners = (int)$settings->bs_tuners;
 	$CS_flag   = $settings->cs_rec_flg==0 ? FALSE : TRUE;
@@ -71,6 +71,23 @@ function cleanup( $rarr, $cmd ){
 			break;
 	}
 */
+
+	// 残留AT削除
+	$res_obj = new DBRecord( RESERVE_TBL );
+	$rvs     = $res_obj->fetch_array( null, null, 'complete=0 AND endtime<now()' );
+	foreach( $rvs as $r ){
+		switch( at_clean( $r, $settings ) ){
+			case 0:
+				// 予約終了化
+				$wrt_set['complete'] = 1;
+				$rev_obj->force_update( $r['id'], $wrt_set );
+				continue;
+			case 1:	// トランスコード中
+				continue;
+			case 2:	// 別ユーザーでAT登録
+				break;
+		}
+	}
 
 	$ps_output = shell_exec( PS_CMD.' 2>/dev/null' );
 	$rarr      = explode( "\n", $ps_output );

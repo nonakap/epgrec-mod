@@ -34,13 +34,13 @@ function create_sql_time( $tmp_time ) {
 if( $usable_tuners != 0 ){
 	$smf_type  = 'BS';
 	$type      = array( 'BS', 'CS', 'CS' );
-	$rec_time  = array( 220, 180, 240 );
+	$rec_time  = array( 220, 240, 180 );
 	// 'BS17_0','BS17_1'は、難視聴なので削除
 	$ch_list   = array(
 					array( BS_EPG_CHANNEL, 'BS15_0','BS15_1','BS1_0','BS1_1','BS3_0','BS3_1','BS5_0','BS5_1','BS7_0','BS7_1','BS7_2','BS9_0','BS9_1','BS9_2',
 							'BS11_0','BS11_1','BS11_2','BS13_0','BS13_1','BS19_0','BS19_1','BS19_2','BS21_0','BS21_1','BS21_2','BS23_0','BS23_1','BS23_2' ),
-					array( CS1_EPG_CHANNEL, CS2,CS8,CS10 ),
-					array( CS2_EPG_CHANNEL, CS4,CS6,CS12,CS14,CS16,CS18,CS20,CS22,CS24 )
+					array( CS2_EPG_CHANNEL, 'CS4','CS6','CS12','CS14','CS16','CS18','CS20','CS22','CS24' ),
+					array( CS1_EPG_CHANNEL, 'CS2','CS8','CS10' )
 				);
 	$sheep_lmt = $settings->cs_rec_flg==0 ? 1 : 3;
 	$add_time  = $settings->rec_switch_time + 2;
@@ -50,22 +50,22 @@ if( $usable_tuners != 0 ){
 			exit;
 	}
 	$shm_id   = shmop_open_surely();
-	$sql_base = "WHERE complete = '0' AND (type = 'BS' OR type = 'CS')";
+	$sql_base = "WHERE complete=0 AND (type='BS' OR type='CS')";
 	$loop_tim = 10;
 	$key      = 0;
 	$use_cnt  = 0;
 //	$st_time  = time();
 	while(1){
 		$sql_time   = create_sql_time( $rec_time[$key]+$add_time );
-		$motion_sql = "' AND title NOT LIKE '%放送%休止%' AND title NOT LIKE '%放送設備%'".$sql_time;
-		$rest_sql   = "' AND ( title LIKE '%放送%休止%' OR title LIKE '%放送設備%' )".$sql_time;
+		$motion_sql = "' AND title NOT LIKE '%放送%休止%' AND title NOT LIKE '%放送設備%' AND title NOT LIKE '%試験放送%' AND title NOT LIKE '%メンテナンス%'".$sql_time;
+		$rest_sql   = "' AND ( title LIKE '%放送%休止%' OR title LIKE '%放送設備%' OR title LIKE '%試験放送%' OR title LIKE '%メンテナンス%' )".$sql_time;
 		$sql_cmd = $sql_base.create_sql_time( $rec_time[$key] + $add_time*2 + $settings->former_time + $loop_tim );
-		$sql_chk = $sql_base.' AND starttime > now() AND starttime < addtime( now(), sec_to_time('.( $rec_time[$key]+$add_time + PADDING_TIME ).') )';
+		$sql_chk = $sql_base.' AND starttime>now() AND starttime<addtime( now(), sec_to_time('.( $rec_time[$key]+$add_time + PADDING_TIME ).') )';
 		if( $use_cnt < $usable_tuners ){
 			// 録画重複チェック
-			$off_tuners = DBRecord::countRecords( RESERVE_TBL, $sql_cmd );
+			$revs       = DBRecord::createRecords( RESERVE_TBL, $sql_cmd );
+			$off_tuners = count( $revs );
 			if( $off_tuners+$use_cnt < $tuners ){
-				$revs  = DBRecord::createRecords( RESERVE_TBL, $sql_cmd );
 				$lp_st = time();
 				do{
 					//空チューナー降順探索
@@ -89,8 +89,8 @@ if( $usable_tuners != 0 ){
 								while( sem_release( $sem_id[$slc_tuner] ) === FALSE )
 									usleep( 100 );
 
-								if( DBRecord::countRecords( RESERVE_TBL, $sql_chk ) > 0 ){
-									$rr     = DBRecord::createRecords( RESERVE_TBL, $sql_chk );
+								$rr = DBRecord::createRecords( RESERVE_TBL, $sql_chk );
+								if( count( $rr ) > 0 ){
 									$motion = TRUE;
 									if( $slc_tuner < TUNER_UNIT1 ){
 										foreach( $rr as $rev ){
@@ -123,19 +123,21 @@ if( $usable_tuners != 0 ){
 												break;
 										}else
 											if( ++$key < $sheep_lmt ){
+												/* いらんよね
 												if( $rec_time[$key-1] > $rec_time[$key] )
 													continue;
 												else{
 													shmop_write_surely( $shm_id, $shm_name, 0 );
 													continue 4;
 												}
+												*/
 											}else{
 												shmop_write_surely( $shm_id, $shm_name, 0 );
 												break 4;		// 終了
 											}
 									}
 
-									$cmdline = INSTALL_PATH.'/airwavesSheep.php '.$type[$key].' '.$slc_tuner.' '.$value.' '.$rec_time[$key].' '.$ch_disk;
+									$cmdline = INSTALL_PATH.'/airwavesSheep.php '.$type[$key].' '.$slc_tuner.' '.$value.' '.$rec_time[$key].' '.$ch_disk;	// $ch_disk is dummy
 /*									if( $key==2 && $usable_tuners==3 && time()-$st_time<10 )
 										$cmdline .= ' 120';
 									else
@@ -153,10 +155,10 @@ if( $usable_tuners != 0 ){
 										}
 									}
 									if( !HIDE_CH_EPG_GET ){
-										$cut_sid_cmd = "WHERE skip = '1' AND type = '".$type[$key]."'";
-										$hit         = DBRecord::countRecords( CHANNEL_TBL, $cut_sid_cmd ) + $cnt;
+										$cut_sid_cmd = "WHERE skip=1 AND type='".$type[$key]."'";
+										$cuts        = DBRecord::createRecords( CHANNEL_TBL, $cut_sid_cmd );
+										$hit         = count( $cuts ) + $cnt;
 										if( $hit > $cnt ){
-											$cuts = DBRecord::createRecords( CHANNEL_TBL, $cut_sid_cmd );
 											foreach( $cuts as $cut_ch ){
 												if( in_array( (string)$cut_ch->sid, $cut_sids ) === FALSE )
 													$cut_sids[$cnt++] = (string)$cut_ch->sid;

@@ -91,31 +91,32 @@ function rate_time( $minute )
 	// ストレージ空き容量取得
 	$ts_stream_rate = TS_STREAM_RATE;
 	$spool_path = INSTALL_PATH.$settings->spool;
-	// 全ストレージ空き容量仮取得
-	$root_mega = $free_mega = (int)( disk_free_space( $spool_path ) / ( 1024 * 1024 ) );
-	// スプール･ルート･ストレージの空き容量保存
-	$stat  = stat( $spool_path );
-	$dvnum = (int)$stat['dev'];
-	$spool_disks = array();
-	$arr = array();
-	$arr['dev']   = $dvnum;
-	$arr['dname'] = get_device_name( $dvnum );
-	$arr['path']  = $settings->spool;
-	$usr_stat = posix_getpwuid( $stat['uid']);
-	$own_chk  = $stat['uid']===posix_getuid() || $usr_stat['name']==='root';
-	$arr['owner'] = $own_chk ? $usr_stat['name'] : '****';
-	$grp_stat = posix_getgrgid( $stat['gid']);
-	$arr['grupe'] = $own_chk ? $grp_stat['name'] : '****';
-	$arr['perm']  = sprintf("0%o", $stat['mode'] );
-	$arr['wrtbl'] = ( $stat['uid']===posix_getuid() && ($stat['mode']&0300)===0300 ) || ( posix_getgid()===$stat['gid'] && ($stat['mode']&0030)===0030 ) || ($stat['mode']&0003)===0003 ? '1' :'0';
-//	$arr['link']  = 'spool root';
-	$arr['size']  = number_format( $root_mega/1024, 1 );
-	$arr['time']  = rate_time( $root_mega );
-	array_push( $spool_disks, $arr );
-	$devs = array( $dvnum );
-	// スプール･ルート上にある全ストレージの空き容量取得
 	$files = scandir( $spool_path );
 	if( $files !== FALSE ){
+		// 全ストレージ空き容量仮取得
+		$root_mega = $free_mega = (int)( disk_free_space( $spool_path ) / ( 1024 * 1024 ) );
+		// スプール･ルート･ストレージの空き容量保存
+		$stat  = stat( $spool_path );
+		$dvnum = (int)$stat['dev'];
+		$spool_disks = array();
+		$arr = array();
+		$arr['dev']   = $dvnum;
+		$arr['dname'] = get_device_name( $dvnum );
+		$arr['path']  = $settings->spool;
+		$usr_stat = posix_getpwuid( $stat['uid']);
+		$own_chk  = $stat['uid']===posix_getuid() || $usr_stat['name']==='root';
+		$arr['owner'] = $own_chk ? $usr_stat['name'] : '****';
+		$grp_stat = posix_getgrgid( $stat['gid']);
+		$arr['grupe'] = $own_chk ? $grp_stat['name'] : '****';
+		$arr['perm']  = sprintf("0%o", $stat['mode'] );
+		$arr['wrtbl'] = ( $stat['uid']===posix_getuid() && ($stat['mode']&0300)===0300 ) || ( posix_getgid()===$stat['gid'] && ($stat['mode']&0030)===0030 ) || ($stat['mode']&0003)===0003 ? '1' :'0';
+//		$arr['link']  = 'spool root';
+		$arr['size']  = number_format( $root_mega/1024, 1 );
+		$arr['time']  = rate_time( $root_mega );
+		array_push( $spool_disks, $arr );
+		$devs = array( $dvnum );
+
+		// スプール･ルート上にある全ストレージの空き容量取得
 		array_splice( $files, 0, 2 );
 		foreach( $files as $entry ){
 			$entry_path = $spool_path.'/'.$entry;
@@ -136,7 +137,7 @@ function rate_time( $minute )
 					$arr['grupe'] = $own_chk ? $grp_stat['name'] : '****';
 					$arr['perm']  = sprintf("0%o", $stat['mode'] );
 					$arr['wrtbl'] = ( $stat['uid']===posix_getuid() && ($stat['mode']&0300)===0300 ) || ( posix_getgid()===$stat['gid'] && ($stat['mode']&0030)===0030 ) || ($stat['mode']&0003)===0003 ? '1' :'0';
-	//				$arr['link']  = readlink( $entry_path );
+//					$arr['link']  = readlink( $entry_path );
 					$arr['size']  = number_format( $entry_mega/1024, 1 );
 					$arr['time']  = rate_time( $entry_mega );
 					array_push( $spool_disks, $arr );
@@ -144,6 +145,22 @@ function rate_time( $minute )
 				}
 			}
 		}
+	}else{
+		// SPOOL不在
+		$free_mega = 0;
+		$spool_disks = array();
+		$arr = array();
+		$arr['dev']   = 0;
+		$arr['dname'] = 'none';
+		$arr['path']  = '---';
+		$arr['owner'] = '----';
+		$arr['grupe'] = '----';
+		$arr['perm']  = '------';
+		$arr['wrtbl'] = '0';
+//		$arr['link']  = 'spool root';
+		$arr['size']  = '----';
+		$arr['time']  = '----';
+		array_push( $spool_disks, $arr );
 	}
 
 	$link_add = '';

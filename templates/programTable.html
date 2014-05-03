@@ -123,6 +123,8 @@
 			var tmp_disc = $('#id_discontinuity').attr('checked');
 			var id_discontinuity = tmp_disc ? 1 : 0;
 			var id_priority = $('#id_priority').val();
+			tmp_disc = $('#id_ts_del').attr('checked');
+			var id_ts_del = tmp_disc ? 1 : 0;
 			$.post('customReservation.php', { syear: id_syear,
 							  smonth: id_smonth,
 							  sday: id_sday,
@@ -142,7 +144,8 @@
 							  category_id: id_category_id,
 							  program_id: id_program_id,
 							  discontinuity: id_discontinuity,
-							  priority: id_priority }, function(data) {
+							  priority: id_priority,
+							  ts_del: id_ts_del }, function(data) {
 				var recv = data.match(/error/i);
 				if( recv != null ){
 					$('#floatBox4Dialog').dialog('close');
@@ -282,21 +285,23 @@ table#reservation_table td {
     text-align: center;
 }
 
-table#reservation_table tr.ctg_news, #category_select a.ctg_news {background-color: #FFFFD8;}
-table#reservation_table tr.ctg_etc, #category_select a.ctg_etc {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_information, #category_select a.ctg_information {background-color: #F2D8FF;}
-table#reservation_table tr.ctg_sports, #category_select a.ctg_sports {background-color: #D8FFFF;}
-table#reservation_table tr.ctg_cinema, #category_select a.ctg_cinema {background-color: #FFD8D8;}
-table#reservation_table tr.ctg_music, #category_select a.ctg_music {background-color: #D8D8FF;}
-table#reservation_table tr.ctg_drama, #category_select a.ctg_drama {background-color: #D8FFD8;}
-table#reservation_table tr.ctg_anime, #category_select a.ctg_anime {background-color: #FFE4C8;}
-table#reservation_table tr.ctg_variety, #category_select a.ctg_variety {background-color: #FFD2EB;}
-table#reservation_table tr.ctg_documentary, #category_select a.ctg_documentary {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_stage, #category_select a.ctg_stage {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_hobby, #category_select a.ctg_hobby {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_welfare, #category_select a.ctg_welfare {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_expand, #category_select a.ctg_expand {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #E4F4F4;}
+table#reservation_table tr.ctg_1,  #category_select a.ctg_1  {background-color: #FFFFD8;}	/* NEWS */
+table#reservation_table tr.ctg_2,  #category_select a.ctg_2  {background-color: #D8FFFF;}	/* SPORTS */
+table#reservation_table tr.ctg_3,  #category_select a.ctg_3  {background-color: #F2D8FF;}	/* INFORMATION */
+table#reservation_table tr.ctg_4,  #category_select a.ctg_4  {background-color: #D8FFD8;}	/* DRAMA */
+table#reservation_table tr.ctg_5,  #category_select a.ctg_5  {background-color: #D8D8FF;}	/* MUSIC */
+table#reservation_table tr.ctg_6,  #category_select a.ctg_6  {background-color: #FFD2EB;}	/* VARIETY */
+table#reservation_table tr.ctg_7,  #category_select a.ctg_7  {background-color: #FFD8D8;}	/* CINEMA */
+table#reservation_table tr.ctg_8,  #category_select a.ctg_8  {background-color: #FFE4C8;}	/* ANIME */
+table#reservation_table tr.ctg_9,  #category_select a.ctg_9  {background-color: #FFFFFF;}	/* DOCUMENTARY */
+table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #FFFFFF;}	/* STAGE */
+table#reservation_table tr.ctg_11, #category_select a.ctg_11 {background-color: #FFFFFF;}	/* HOBBY */
+table#reservation_table tr.ctg_12, #category_select a.ctg_12 {background-color: #FFFFFF;}	/* WELFARE */
+table#reservation_table tr.ctg_13, #category_select a.ctg_13 {background-color: #FFFFFF;}	/* RESERVE1 */
+table#reservation_table tr.ctg_14, #category_select a.ctg_14 {background-color: #FFFFFF;}	/* RESERVE2 */
+table#reservation_table tr.ctg_15, #category_select a.ctg_15 {background-color: #FFFFFF;}	/* EXPAND */
+table#reservation_table tr.ctg_16, #category_select a.ctg_16 {background-color: #FFFFFF;}	/* ETC */
+table#reservation_table tr.ctg_aa, #category_select a.ctg_aa {background-color: #E4F4F4;}	/*  */
 table#reservation_table tr.prg_rec  {background-color: #F55;color:#FEE;}
 table#reservation_table tr.prg_rec_oth  {background-color: #F88;}
 table#reservation_table tr.freeze {background-color: #CCCCCC;}
@@ -347,8 +352,8 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
 <input type="hidden" name="rest_alert" value="{$rest_alert}">
 <input type="hidden" name="criterion_enab" value="{$criterion_enab}">
 <input type="hidden" name="smart_repeat" value="{$smart_repeat}">
-<b>検索語句:</b>(<input type="checkbox" name="use_regexp" value="1" {if $use_regexp}checked="checked"{/if}>正規表現 <input type="checkbox" name="ena_title" value="1" {if $ena_title}checked="checked"{/if}>タイトル <input type="checkbox" name="ena_desc" value="1" {if $ena_desc}checked="checked"{/if}>概要)<br>
-<input type="text" name="search" value="{$search|escape}" class="example1"><br>
+<b>検索語句:</b>(<input type="checkbox" id="use_regexp" name="use_regexp" value="1" {if $use_regexp}checked="checked"{/if}><label for="use_regexp">正規表現</label> <input type="checkbox" id="collate_ci" name="collate_ci" value="1" title="正規表現と併用不可" {if $collate_ci}checked="checked"{/if}><label for="collate_ci">全半角同一視</label> <input type="checkbox" id="ena_title" name="ena_title" value="1" {if $ena_title}checked="checked"{/if}><label for="ena_title">タイトル</label> <input type="checkbox" id="ena_desc" name="ena_desc" value="1" {if $ena_desc}checked="checked"{/if}><label for="ena_desc">概要</label>)<br>
+<input type="text" name="search" value="{$search|escape}" class="example1" title="通常検索時のワイルドカードは'%'・半角スペースは'_'です。 NOT検索は語彙冒頭に'-'を付加してください。"><br>
 <b>種別:</b>(
   {foreach from=$types item=type}
     <input type="checkbox" name="type{$type.value}" value="1" {$type.checked}>{$type.name} 
@@ -358,7 +363,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
     <option value="{$st.id}" {$st.selected}>{$st.name}</option>
   {/foreach}
   </select>
-　<b>ジャンル:</b>(<input type="checkbox" name="first_genre" value="0" {if $first_genre == 0}checked="checked"{/if} >全保持)
+　<b>ジャンル:</b>(<input type="checkbox" name="first_genre" value="0" title="保持しているジャンル情報の全てを検索対象にします" {if $first_genre == 0}checked="checked"{/if} >全保持)
 <select name="category_id" onChange="$k_sub_genre=change_subGenre(this.selectedIndex)">
   {foreach from=$cats item=cat}
   <option value="{$cat.id}" {$cat.selected}>{$cat.name}</option>
@@ -408,16 +413,16 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
 
 {foreach from=$programs name=loop item=program}
  <tr id="resid_{$program.id}" class="ctg_{$program.cat}{if $program.rec > 0}{if $program.key_id == $keyword_id} prg_rec{else} prg_rec_oth{/if}{/if}{if ! $program.autorec} freeze{/if}">
-  <td style="text-align: center;"><a {if $program.keyword != ""}href="{$program.keyword}"{/if}>{$smarty.foreach.loop.iteration}</a></td>
+  <td style="text-align: center;"><a {if $program.keyword != ""}href="{$program.keyword}" title="この番組を条件にして番組検索にジャンプ"{/if}>{$smarty.foreach.loop.iteration}</a></td>
   <td>{$program.type}</td>
   <td>{$program.station_name}</td>
-  <td style="text-align: center;white-space: nowrap;"><a href="index.php?type={$program.type}&length=8&time={$program.prg_top}">{$program.date}</a></td>
+  <td style="text-align: center;white-space: nowrap;"><a href="index.php?type={$program.type}&length=8&time={$program.prg_top}" title="EPG番組表へジャンプ">{$program.date}</a></td>
   <td style="text-align: center;">{$program.starttime}{$program.endtime}<br>　　({$program.duration})</td>
   <td style="text-align: left;">{$program.title|escape}</td>
   <td style="text-align: left;">{$program.description|escape}</td>
-  <td style="text-align: right;">{if $program.excl }*{/if}{if !$program.key_id }□{else}<a href="programTable.php?keyword_id={$program.key_id}">{$program.key_id}</a>{/if}</td>
+  <td style="text-align: right;">{if $program.excl }*{/if}{if !$program.key_id }□{else}<a href="programTable.php?keyword_id={$program.key_id}" title="自動キーワード編集にジャンプ">{$program.key_id}</a>{/if}</td>
   <td style="margin: 0;padding: 0;" class="tgl_btn"><input type="button" value={if $program.rev_id}"削除"{else}"録画"{/if} onClick="javascript:PRG.tgl_button('{$program.id}',this)"></td>
-  <td style="margin: 0;padding: 0;"><input type="button" value="詳細" onClick="javascript:PRG.customform('{$program.id}','0')"><br><input type="button" value="補整" onClick="javascript:PRG.customform('{$program.id}','{if $keyword_id}{$keyword_id}{else}{$program.key_id}{/if}')"></td>
+  <td style="margin: 0;padding: 0;"><input type="button" value="詳細" onClick="javascript:PRG.customform('{$program.id}','0')"><br><input type="button" value="補整" onClick="javascript:PRG.customform('{$program.id}','{if $keyword_id}{$keyword_id}{else}{$program.key_id}{/if}')" title="自動予約設定を反映する"></td>
   <td class="rev_id">{$program.rev_id}</td>
   <td class="autorec">{$program.autorec}</td>
  </tr>
@@ -435,9 +440,10 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
 <legend><b>検索条件</b></legend>
   <b>語句:</b>{if $search == null}なし{else}{$search|escape}{/if}
   <b>　正規表現:</b>{if $use_regexp}使う{else}使わない{/if}
+  <b>　全半角同一視:</b>{if $collate_ci}する{else}しない{/if}
   <b>　検索対象:</b>{if $ena_title}タイトル{/if}{if $ena_desc}{if $ena_title}+{/if}概要{/if}
   <br><b>種別:</b>{$type_names}
-  <b>　局:</b>{if $k_station == 0}すべて{else}{$k_station_name}{/if}
+  <b>　局:</b>{$k_station_name}
   <b>　ジャンル({if $first_genre == 1}第一{else}全保持{/if}):</b>{if $k_category == 0}すべて{else}{$k_category_name}{/if}
   <b>サブジャンル:</b><script type="text/javascript">sub_genre_view({$k_category}, {$k_sub_genre});</script>
   <b>　曜日:</b>{if $weekofday == 0x7f}なし{else}{$wds_name}{/if}
@@ -452,6 +458,7 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
   <input type="hidden" name="k_use_regexp" value="{$use_regexp}">
   <input type="hidden" name="k_ena_title" value="{$ena_title}">
   <input type="hidden" name="k_ena_desc" value="{$ena_desc}">
+  <input type="hidden" name="k_collate_ci" value="{$collate_ci}">
   <input type="hidden" name="k_search" value="{$search}">
   <input type="hidden" name="k_typeGR" value="{$k_typeGR}">
   <input type="hidden" name="k_typeBS" value="{$k_typeBS}">
@@ -479,13 +486,18 @@ table#reservation_table td.rev_id, table#reservation_table td.autorec {display: 
      <option value="{$smarty.foreach.recmode.index}" {$mode.selected} >{$mode.name}</option>
   {/foreach}
    </select>　
-  <b>優先度</b><input type="text" name="k_priority" value="{$priority}" size="2" class="required digits">
-  <br><b>保存ディレクトリー </b>{$spool|escape}<input type="text" name="k_directory" value="{$directory|escape}" size="80" class="required">
+  <b>優先度</b><input type="text" name="k_priority" value="{$priority}" size="2" class="required digits" title="数値が大きい方が優先される">
+  <br><b>保存ディレクトリー </b>{$spool|escape}<input type="text" name="k_directory" value="{$directory|escape}" size="80" class="required" list="example">
+<!-- HTML5以降 -->
+<datalist id="example">
+  {$dir_collection}
+</datalist>
   <br><b>録画ファイル名の形式 </b><input type="text" name="k_filename" value="{$filename|escape}" size="80" class="required">
 <table cellspacing="1" border="1" style="text-align: center;">
   <tr><th>特殊文字列</th><td>%TITLE%</td><td>%ST%</td><td>%ET%</td><td>%TYPE%</td><td>%CH%</td><td>%DOW%</td><td>%DOWJ%</td><td>%YEAR%</td><td>%MONTH%</td><td>%DAY%</td><td>%HOUR%</td><td>%MIN%</td><td>%SEC%</td><td>%DURATION%</td></tr>
   <tr><th>置換後の内容</th><td>番組タイトル</td><td>開始日時<br>（ex.200907201830)</td><td>終了日時<br>（同左）</td><td>GR/BS/CS</td><td>チャンネル番号</td><td>曜日<br>（Sun-Mon）</td><td>曜日<br>（日-土）</td><td>開始年</td><td>開始月</td><td>開始日</td><td>開始時</td><td>開始分</td><td>開始秒</td><td>録画時間<br>（秒）</td></tr>
 </table>
+{$trans_set}
 </fieldset>
 　<input type="submit" value={if !$keyword_id }"この絞り込みを自動録画キーワードに登録"{else}"この設定で登録キーワードを更新"{/if}>
 {if $keyword_id}<b>／</b><input type="button" value="削除" onClick="javascript:PRG.delkey('{$keyword_id}')">{/if}

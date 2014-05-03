@@ -18,6 +18,7 @@ define( 'SEM_REALVIEW', (SEM_EX_START+MAX_TUNERS) );	// 61:   リアルタイム
 define( 'SEM_EPGDUMP',  (SEM_REALVIEW+1) );				// 62:   epgdump
 define( 'SEM_EPGSTORE', (SEM_REALVIEW+2) );				// 63:   EPGのDB展開
 define( 'SEM_REBOOT',   (SEM_REALVIEW+3) );				// 64:   リブート・フラグ
+define( 'SEM_TRANSCODE',(SEM_REALVIEW+4) );				// 65:   トランスコードマネージャ起動確認
 define( 'SEM_KW_START', (SEM_REALVIEW+10) );			// 71-80:キーワード予約排他処理用(キーワードID)
 define( 'SEM_MAX',      (SEM_KW_START+SEM_KW_MAX-1) );	// 
 define( 'SHM_ID',      255 );							// 共用メモリー
@@ -386,24 +387,20 @@ function shmop_write_surely( &$shm_id, $shm_name, $sorce ){
 
 function putProgramHtml( $src, $type, $channel_id, $genre, $sub_genre ){
 	if( $src !== "" ){
-		$temp = trim($src);
-		if( strncmp( $temp, '[￥]', 5 ) == 0 ){
-			$out_title = substr( $temp, 5 );
-		}else
-			$out_title = $temp;
+		$out_title = trim($src);
 		if( strpos( $out_title, ' #' ) === FALSE ){
-			$delimiter = strpos( $out_title, '「' )===FALSE ? "" : '「';
+			$delimiter = strpos( $out_title, '「' )===FALSE ? '' : '「';
 		}else
 			$delimiter = ' #';
-		if( $delimiter !== "" ){
+		if( $delimiter !== '' ){
 			$keyword = explode( $delimiter, $out_title );
-			if( $keyword[0] === "" )
+			if( $keyword[0] === '' )
 				$keyword[0] = $out_title;
 		}else
 			$keyword[0] = $out_title;
 		return 'programTable.php?search='.rawurlencode(str_replace( ' ', '%', $keyword[0] )).'&type='.$type.'&station='.$channel_id.'&category_id='.$genre.'&sub_genre='.$sub_genre;
 	}else
-		return "";
+		return '';
 }
 
 function parse_time( $time_char )
@@ -436,7 +433,7 @@ function transTime( $second, $view=FALSE )
 		$second *= -1;
 		$flag = '-';
 	}else
-		$flag = "";
+		$flag = '';
 	if( $second % 60 || $view )
 		return $flag.sprintf( '%02d:%02d:%02d', $second/3600, (int)($second/60)%60, $second%60 );
 	else
@@ -459,5 +456,109 @@ function get_device_name( $dvnum )
 		return $drtype==8 ? '/dev/sd'.chr(0x61+($drnum>>4)).($drnum&0x0f) : $drtype.':'.$drnum;
 	}else
 		return 'tmpfs(0:'.$drnum.')';
+}
+
+function get_directrys( $spool_path )
+{
+	$dir_collection = '';
+	$files          = scandir( $spool_path );
+	if( $files !== FALSE ){
+		foreach( $files as $entry ){
+			if( $entry[0] !== '.' ){
+				$entry_path = $spool_path.'/'.$entry;
+				$stat       = stat( $entry_path );
+				if( is_dir( $entry_path ) &&
+						(( ($stat['mode']&0300)===0300 && $stat['uid']===posix_getuid() ) ||
+						 ( ($stat['mode']&0030)===0030 && $stat['gid']===posix_getgid() ) ||
+						   ($stat['mode']&0003)===0003 ) )
+					$dir_collection .= '<option value="'.htmlspecialchars($entry,ENT_QUOTES).'"></option>';
+			}
+		}
+	}
+	return $dir_collection;
+}
+
+function make_pager( $link, $separate_records, $total, $page )
+{
+	if( $total > $separate_records ){
+		$page_limit = (int)($total / $separate_records);
+		if( $total % $separate_records )
+			$page_limit++;
+		$cnt        = $page<=4 ? 1 : $page-4;
+		$loop_limit = $cnt + 9;
+		if( $loop_limit >= $page_limit ){
+			$loop_limit = $page_limit;
+			$cnt = $loop_limit-9>1 ? $loop_limit-9 : 1;
+		}
+		$link  = ' href="'.$link.'?page=';
+		$pager = '<div style="text-align: right;">| <a';
+		if( $page > 1 )
+			$pager .= $link.'1"';
+		$pager .= '>1</a> | <a';
+		if( $page_limit > 10 ){
+			if( $page > 10 )
+				$pager .= $link.($page-10).'"';
+			$pager .= '>-10</a> | <a';
+		}
+		if( $page > 1 )
+			$pager .= $link.($page-1).'"';
+		$pager .= '>&lt;</a> |';
+		do{
+			$pager .= '<a'.($cnt!==$page ? $link.$cnt.'"' : ' style="color: white; background-color: royalblue;"').'> '.$cnt.' </a>|';
+		}while( ++$cnt <= $loop_limit );
+		$pager .= ' <a';
+		if( $page < $page_limit )
+			$pager .= $link.($page+1).'"';
+		$pager .= '>&gt;</a> | <a';
+		if( $page_limit > 10 ){
+			if( $page+9  < $page_limit )
+				$pager .= $link.($page+10).'"';
+			$pager .= '>+10</a> | <a';
+		}
+		if( $page < $page_limit )
+			$pager .= $link.$page_limit.'"';
+		$pager .= '>'.$page_limit.'</a> || <a'.$link.'-">全表示</a> |</div>';
+		return $pager;
+	}else
+		return '';
+}
+
+function at_clean( $r, $settings, $resv_cancel=FALSE )
+{
+	if( $resv_cancel || strpos( $RECORD_MODE[$r['mode']]['suffix'], '.ts' )!==FALSE ){
+		// 残留AT削除
+		while(1){
+			$ret_cd = system( $settings->atrm . ' ' . $r['job'], $var_ret );
+			if( $ret_cd!==FALSE && $var_ret==0 ){
+				if( $resv_cancel )
+					reclog( '[予約ID:'.$r['id'].' 削除] '.
+						$r['channel_disc'].'(T'.$r['tuner'].'-'.$r['channel'].') '.$r['starttime'].' 『'.$r['title'].'』' );
+				else
+					reclog( '[予約ID:'.$r['id'].' 終了化(予約開始失敗・AT['.$r['job'].']残留)] '.
+						$r['channel_disc'].'(T'.$r['tuner'].'-'.$r['channel'].') '.$r['starttime'].' 『'.$r['title'].'』', EPGREC_ERROR );
+				break;
+			}
+			$rarr       = explode( "\n", str_replace( "\t", ' ', shell_exec( $settings->at.'q' ) ) );
+			$search_job = $r['job'].' ';
+			$search_own = posix_getlogin();
+			foreach( $rarr as $str_var ){
+				if( strncmp( $str_var, $search_job, strlen( $search_job ) ) == 0 ){
+					if( strpos( $str_var, $search_own ) !== FALSE )
+						continue 2;
+					else{
+						reclog( '[予約ID:'.$r['id'].($resv_cancel ? ' 削除中止(' : ' 終了化中止(予約開始失敗・').'AT['.$r['job'].']削除失敗)] ('.
+								$search_own.')以外でJOBが登録されている['.$str_var.']', EPGREC_ERROR );
+						return 2;
+					}
+				}
+			}
+			reclog( '[予約ID:'.$r['id'].' 終了化(予約開始失敗・AT['.$r['job'].']無残留)] '.
+					$r['channel_disc'].'(T'.$r['tuner'].'-'.$r['channel'].') '.$r['starttime'].' 『'.$r['title'].'』', EPGREC_ERROR );
+			break;
+		}
+		return 0;
+	}else
+		// トランスコード中には手をつけない(将来的にはdo-record.shから分離するので今はこれだけ)
+		return 1;
 }
 ?>

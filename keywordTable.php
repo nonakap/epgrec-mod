@@ -10,7 +10,7 @@ include_once( INSTALL_PATH . '/settings/menu_list.php' );
 
 function word_chk( $chk_wd )
 {
-	return ( strpos( $chk_wd, "\"" )===FALSE && strpos( $chk_wd, "'" )===FALSE ? $chk_wd : "" );
+	return ( strpos( $chk_wd, '"' )===FALSE && strpos( $chk_wd, '\'' )===FALSE ? $chk_wd : '' );
 }
 
 $settings = Settings::factory();
@@ -31,25 +31,26 @@ if( isset($_POST['add_keyword']) ) {
 				$rec = new Keyword( 'id', $keyword_id );
 			}else
 				$rec = new Keyword();
-			$rec->keyword      = $_POST['k_search'];
-			$rec->kw_enable    = isset( $_POST['k_kw_enable'] );
-			$rec->typeGR       = $_POST['k_typeGR'];
-			$rec->typeBS       = $_POST['k_typeBS'];
-			$rec->typeCS       = $_POST['k_typeCS'];
-			$rec->typeEX       = $_POST['k_typeEX'];
-			$rec->category_id  = $_POST['k_category'];
-			$rec->sub_genre    = $_POST['k_sub_genre'];
-			$rec->first_genre  = $_POST['k_first_genre'];
-			$rec->channel_id   = $_POST['k_station'];
-			$rec->use_regexp   = $_POST['k_use_regexp'];
-			$rec->ena_title    = $_POST['k_ena_title'];
-			$rec->ena_desc     = $_POST['k_ena_desc'];
-			$rec->weekofdays   = $_POST['k_weekofday'];
-			$rec->prgtime      = $_POST['k_prgtime'];
-			$rec->period       = $_POST['k_period'];
-			$rec->autorec_mode = $_POST['autorec_mode'];
-			$rec->sft_start    = parse_time( $_POST['k_sft_start'] );
-			$rec->sft_end      = parse_time( $_POST['k_sft_end'] );
+			$rec->keyword         = $_POST['k_search'];
+			$rec->kw_enable       = isset( $_POST['k_kw_enable'] );
+			$rec->typeGR          = $_POST['k_typeGR'];
+			$rec->typeBS          = $_POST['k_typeBS'];
+			$rec->typeCS          = $_POST['k_typeCS'];
+			$rec->typeEX          = $_POST['k_typeEX'];
+			$rec->category_id     = $_POST['k_category'];
+			$rec->sub_genre       = $_POST['k_sub_genre'];
+			$rec->first_genre     = $_POST['k_first_genre'];
+			$rec->channel_id      = $_POST['k_station'];
+			$rec->use_regexp      = $_POST['k_use_regexp'];
+			$rec->collate_ci      = $_POST['k_collate_ci'];
+			$rec->ena_title       = $_POST['k_ena_title'];
+			$rec->ena_desc        = $_POST['k_ena_desc'];
+			$rec->weekofdays      = $_POST['k_weekofday'];
+			$rec->prgtime         = $_POST['k_prgtime'];
+			$rec->period          = $_POST['k_period'];
+			$rec->autorec_mode    = $_POST['autorec_mode'];
+			$rec->sft_start       = parse_time( $_POST['k_sft_start'] );
+			$rec->sft_end         = parse_time( $_POST['k_sft_end'] );
 			$rec->discontinuity   = isset($_POST['k_discontinuity']);
 			$rec->priority        = $_POST['k_priority'];
 			$rec->overlap         = isset( $_POST['k_overlap'] );
@@ -58,9 +59,35 @@ if( isset($_POST['add_keyword']) ) {
 			$rec->smart_repeat    = isset( $_POST['k_smart_repeat'] );
 			$rec->filename_format = word_chk( $_POST['k_filename'] );
 			$rec->directory       = word_chk( $_POST['k_directory'] );
+			$sem_key              = sem_get_surely( SEM_KW_START );
+			$shm_id               = shmop_open_surely();
+			$rec->keyid_acquire( $shm_id, $sem_key );	// keyword_id占有
 			$rec->update();
 			if( $keyword_id )
 				$rec->rev_delete();
+			else
+				$keyword_id = $rec->id;
+			// transcode
+			$cnt = 0;
+			for( $loop=0; $loop<TRANS_SET_KEYWD; $loop++ ){
+				$pool = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id='.$keyword_id.' AND type_no='.$loop );
+				$mode = (int)$_POST['k_trans_mode'.$loop];
+				if( $mode ){
+					if( count($pool) ){
+						$trans_ex = $pool[0];
+					}else{
+						$trans_ex = new DBRecord( TRANSEXPAND_TBL );
+						$trans_ex->key_id = $keyword_id;
+					}
+					$trans_ex->type_no = $cnt++;
+					$trans_ex->mode    = $mode;
+					$trans_ex->dir     = word_chk( $_POST['k_transdir'.$loop] );
+					$trans_ex->ts_del  = isset( $_POST['k_auto_del'] );
+					$trans_ex->update();
+				}else
+					if( count($pool) )
+						$pool[0]->delete();
+			}
 			if( (boolean)$rec->kw_enable ){
 				$t_cnt = 0;
 				if( (boolean)$rec->typeGR ){
@@ -82,11 +109,10 @@ if( isset($_POST['add_keyword']) ) {
 				if( $t_cnt > 1 )
 					$type = '*';
 				// 録画予約実行
-				$sem_key = sem_get_surely( SEM_KW_START );
-				$shm_id  = shmop_open_surely();
-				$rec->reservation( $type, $shm_id, $sem_key );
-				shmop_close( $shm_id );
-			}
+				$rec->reservation( $type );
+			}else
+				$rec->keyid_release();	// keyword_id開放
+			shmop_close( $shm_id );
 		}
 		catch( Exception $e ) {
 			exit( $e->getMessage() );
@@ -154,13 +180,13 @@ try {
 		
 		$arr['options'] = '';
 		if( defined( 'KATAUNA' ) ){
-			$arr['options']  = (boolean)$rec->use_regexp ? '正' : '－';
+			$arr['options']  = '<a style="white-space: pre;">'.((boolean)$rec->use_regexp ? '正' : '－');
 			$arr['options'] .= (boolean)$rec->ena_title ? 'タ' : '－';
 			$arr['options'] .= (boolean)$rec->ena_desc ? '概' : '－';
 			$arr['options'] .= '<br>';
 			$arr['options'] .= (boolean)$rec->overlap ? '多' : '－';
 			$arr['options'] .= (boolean)$rec->rest_alert ? '無' : '－';
-			$arr['options'] .= (boolean)$rec->criterion_dura ? '幅' : '－';
+			$arr['options'] .= ((boolean)$rec->criterion_dura ? '幅' : '－').'</a>';
 		}else
 			$arr['options'] = (boolean)$rec->use_regexp ? '○' : '×';
 

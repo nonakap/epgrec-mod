@@ -63,11 +63,23 @@ class Reservation {
 
 				// 同一番組予約チェック
 				if( $program_id ){
-					if( !$overlap )
-						$num = DBRecord::countRecords( RESERVE_TBL, "WHERE program_id = '".$program_id."'" );
-					else
-						$num = DBRecord::countRecords( RESERVE_TBL, "WHERE program_id = '".$program_id."' AND ( overlap = '0' OR autorec = '".$autorec."' ) AND priority >= '".$priority."'" );
-					if( $num ) {
+					$num = DBRecord::countRecords( RESERVE_TBL, 'WHERE program_id='.$program_id.' AND autorec='.$autorec );
+					if( $num == 0 ){
+						if( !$overlap ){
+							$num = DBRecord::countRecords( RESERVE_TBL, 'WHERE program_id='.$program_id );
+							if( $num ){
+								$del_revs = DBRecord::createRecords( RESERVE_TBL, 'WHERE program_id='.$program_id.' AND priority<'.$priority, TRUE );
+								$num     -= count( $del_revs );
+								if( $num <= 0 ){
+									foreach( $del_revs as $rr )
+										self::cancel( $rr->id );
+									$num = 0;
+								}
+							}
+						}else
+							$num = DBRecord::countRecords( RESERVE_TBL, 'WHERE program_id='.$program_id.' AND overlap=0 AND priority>='.$priority );
+					}
+					if( $num ){
 						throw new Exception('同一の番組が録画予約されています');
 					}
 				}
@@ -75,7 +87,7 @@ class Reservation {
 				$duration = $end_time - $start_time;
 				if( (int)$keyword->criterion_dura && $duration!=(int)$keyword->criterion_dura ){
 					if( (int)$keyword->criterion_dura > 1 )
-						reclog( '<a href="programTable.php?keyword_id='.$autorec.'">自動キーワードID:'.$autorec.'</a> にヒットした'.$crec->channel_disc.'-Ch'.$crec->channel.
+						reclog( autoid_button($autorec).'にヒットした'.$crec->channel_disc.'-Ch'.$crec->channel.
 								' <a href="index.php?type='.$crec->type.'&length='.$settings->program_length.'&time='.date( 'YmdH', $start_time ).'">'.$starttime.
 								'</a>『'.htmlspecialchars($title).'』は、収録時間が'.
 								($keyword->criterion_dura/60).'分間から'.($duration/60).'分間に変動しています。', EPGREC_WARN );
@@ -119,39 +131,36 @@ class Reservation {
 			//チューナ仕様取得
 			if( $crec->type === 'GR' ){
 				$tuners   = (int)($settings->gr_tuners);
-				$type_str = "type = 'GR'";
+				$type_str = 'type=\'GR\'';
 				$smf_type = 'GR';
 			}else
 			if( $crec->type === 'EX' ){
 				$tuners   = EXTRA_TUNERS;
-				$type_str = "type = 'EX'";
+				$type_str = 'type=\'EX\'';
 				$smf_type = 'EX';
 			}else{
 				$tuners   = (int)($settings->bs_tuners);
-				$type_str = "(type = 'BS' OR type = 'CS')";
+				$type_str = '(type=\'BS\' OR type=\'CS\')';
 				$smf_type = 'BS';
 			}
 			$stt_str  = toDatetime( $start_time-$ed_tm_sft_chk );
 			$end_str  = toDatetime( $end_time+$ed_tm_sft_chk );
-			$battings = DBRecord::countRecords( RESERVE_TBL, "WHERE complete = '0' AND ".$type_str.
-															" AND starttime <= '".$end_str.
-															"' AND endtime >= '".$stt_str."'" );		//重複数取得
+			$battings = DBRecord::countRecords( RESERVE_TBL, 'WHERE complete=0 AND '.$type_str.
+															' AND starttime<=\''.$end_str.
+															'\' AND endtime>=\''.$stt_str.'\'' );		//重複数取得
 			if( $battings > 0 ){
 				//重複
 				//予約群 先頭取得
+				$res_obj    = new DBRecord( RESERVE_TBL );
 				$prev_trecs = array();
 				while( 1 ){
 					try{
-						$sql_cmd = "WHERE complete = '0' AND ".$type_str.
-															" AND starttime < '".$stt_str.
-															"' AND endtime >= '".$stt_str."'";
-						$cnt = DBRecord::countRecords( RESERVE_TBL, $sql_cmd );
-						if( $cnt === 0 )
+						$prev_trecs = $res_obj->fetch_array( 'complete', 0, $type_str.
+															' AND starttime<\''.$stt_str.
+															'\' AND endtime>=\''.$stt_str.'\' ORDER BY starttime ASC' );
+						if( count($prev_trecs) == 0 )
 							break;
-						$prev_trecs = DBRecord::createRecords( RESERVE_TBL, $sql_cmd.' ORDER BY starttime ASC' );
-						if( $prev_trecs == null )
-							break;
-						$stt_str = toDatetime( toTimestamp( $prev_trecs[0]->starttime )-$ed_tm_sft_chk );
+						$stt_str = toDatetime( toTimestamp( $prev_trecs[0]['starttime'] )-$ed_tm_sft_chk );
 					}catch( Exception $e ){
 						break;
 					}
@@ -159,48 +168,44 @@ class Reservation {
 				//予約群 最後尾取得
 				while( 1 ){
 					try{
-						$sql_cmd = "WHERE complete = '0' AND ".$type_str.
-															" AND starttime <= '".$end_str.
-															"' AND endtime > '".$end_str."'";
-						$cnt = DBRecord::countRecords( RESERVE_TBL, $sql_cmd );
-						if( $cnt === 0 )
+						$prev_trecs = $res_obj->fetch_array( 'complete', 0, $type_str.
+															' AND starttime<=\''.$end_str.
+															'\' AND endtime>\''.$end_str.'\' ORDER BY endtime DESC' );
+						if( count($prev_trecs) == 0 )
 							break;
-						$prev_trecs = DBRecord::createRecords( RESERVE_TBL, $sql_cmd.' ORDER BY endtime DESC' );
-						if( $prev_trecs == null )
-							break;
-						$end_str = toDatetime( toTimestamp( $prev_trecs[0]->endtime )+$ed_tm_sft_chk );
+						$end_str = toDatetime( toTimestamp( $prev_trecs[0]['endtime'] )+$ed_tm_sft_chk );
 					}catch( Exception $e ){
 						break;
 					}
 				}
 
 				//重複予約配列取得
-				$sql_cmd = "WHERE complete = '0' AND ".$type_str.
-															" AND starttime >= '".$stt_str.
-															"' AND endtime <= '".$end_str."' ORDER BY starttime ASC, endtime DESC";
-				$prev_trecs = DBRecord::createRecords( RESERVE_TBL, $sql_cmd );
+				$prev_trecs = $res_obj->fetch_array( 'complete', 0, $type_str.
+															' AND starttime>=\''.$stt_str.
+															'\' AND endtime<=\''.$end_str.'\'' );
+//															'\' AND endtime<=\''.$end_str.'\' ORDER BY starttime ASC, endtime DESC' );
 				// 予約修正に必要な情報を取り出す
 				$trecs = array();
 				for( $cnt=0; $cnt<count($prev_trecs) ; $cnt++ ){
-					$trecs[$cnt]['id']            = (int)$prev_trecs[$cnt]->id;
-					$trecs[$cnt]['program_id']    = (int)$prev_trecs[$cnt]->program_id;
-					$trecs[$cnt]['channel_id']    = (int)$prev_trecs[$cnt]->channel_id;
-					$trecs[$cnt]['title']         = $prev_trecs[$cnt]->title;
-					$trecs[$cnt]['description']   = $prev_trecs[$cnt]->description;
-					$trecs[$cnt]['channel']       = (int)$prev_trecs[$cnt]->channel;
-					$trecs[$cnt]['category_id']   = (int)$prev_trecs[$cnt]->category_id;
-					$trecs[$cnt]['start_time']    = toTimestamp( $prev_trecs[$cnt]->starttime );
-					$trecs[$cnt]['end_time']      = toTimestamp( $prev_trecs[$cnt]->endtime );
-					$trecs[$cnt]['shortened']     = (boolean)$prev_trecs[$cnt]->shortened;
+					$trecs[$cnt]['id']            = (int)$prev_trecs[$cnt]['id'];
+					$trecs[$cnt]['program_id']    = (int)$prev_trecs[$cnt]['program_id'];
+					$trecs[$cnt]['channel_id']    = (int)$prev_trecs[$cnt]['channel_id'];
+					$trecs[$cnt]['title']         = $prev_trecs[$cnt]['title'];
+					$trecs[$cnt]['description']   = $prev_trecs[$cnt]['description'];
+					$trecs[$cnt]['channel']       = (int)$prev_trecs[$cnt]['channel'];
+					$trecs[$cnt]['category_id']   = (int)$prev_trecs[$cnt]['category_id'];
+					$trecs[$cnt]['start_time']    = toTimestamp( $prev_trecs[$cnt]['starttime'] );
+					$trecs[$cnt]['end_time']      = toTimestamp( $prev_trecs[$cnt]['endtime'] );
+					$trecs[$cnt]['shortened']     = (boolean)$prev_trecs[$cnt]['shortened'];
 					$trecs[$cnt]['end_time_sort'] = $trecs[$cnt]['shortened'] ? $trecs[$cnt]['end_time']+$ed_tm_sft : $trecs[$cnt]['end_time'];
-					$trecs[$cnt]['autorec']       = (int)$prev_trecs[$cnt]->autorec;
-					$trecs[$cnt]['path']          = $prev_trecs[$cnt]->path;
-					$trecs[$cnt]['mode']          = (int)$prev_trecs[$cnt]->mode;
-					$trecs[$cnt]['dirty']         = (int)$prev_trecs[$cnt]->dirty;
-					$trecs[$cnt]['tuner']         = (int)$prev_trecs[$cnt]->tuner;
-					$trecs[$cnt]['priority']      = (int)$prev_trecs[$cnt]->priority;
-					$trecs[$cnt]['overlap']       = (boolean)$prev_trecs[$cnt]->overlap;
-					$trecs[$cnt]['discontinuity'] = (int)$prev_trecs[$cnt]->discontinuity;
+					$trecs[$cnt]['autorec']       = (int)$prev_trecs[$cnt]['autorec'];
+					$trecs[$cnt]['path']          = $prev_trecs[$cnt]['path'];
+					$trecs[$cnt]['mode']          = (int)$prev_trecs[$cnt]['mode'];
+					$trecs[$cnt]['dirty']         = (int)$prev_trecs[$cnt]['dirty'];
+					$trecs[$cnt]['tuner']         = (int)$prev_trecs[$cnt]['tuner'];
+					$trecs[$cnt]['priority']      = (int)$prev_trecs[$cnt]['priority'];
+					$trecs[$cnt]['overlap']       = (boolean)$prev_trecs[$cnt]['overlap'];
+					$trecs[$cnt]['discontinuity'] = (int)$prev_trecs[$cnt]['discontinuity'];
 					$trecs[$cnt]['status']        = 1;
 				}
 				//新規予約を既予約配列に追加
@@ -349,14 +354,13 @@ RETRY:;
 PRIORITY_CHECK:
 					if( $autorec ){
 						//優先度判定
-						$sql_cmd = "WHERE complete = '0' AND ".$type_str." AND priority < '".$priority.
-															"' AND starttime <= '".toDatetime($end_time).
-															"' AND endtime >= '".toDatetime($start_time)."'";
-						$pri_lmt = DBRecord::countRecords( RESERVE_TBL, $sql_cmd );
+						$pri_ret = $res_obj->fetch_array( 'complete', 0, $type_str.' AND priority<'.$priority.
+															' AND starttime<=\''.toDatetime($end_time).
+															'\' AND endtime>=\''.toDatetime($start_time).'\' ORDER BY priority ASC' );
+						$pri_lmt = count( $pri_ret );
 						if( $pri_lmt ){
-							$pri_ret = DBRecord::createRecords( RESERVE_TBL, $sql_cmd.' ORDER BY priority ASC' );
 							for( $cnt=$pri_c=0; $cnt<count($trecs) ; $cnt++ )
-								if( $trecs[$cnt]['id'] === (int)$pri_ret[$pri_c]->id ){
+								if( $trecs[$cnt]['id'] === (int)$pri_ret[$pri_c]['id'] ){
 									if( $trecs[$cnt]['status'] ){
 										//優先度の低い予約を仮無効化
 										$trecs[$cnt]['status'] = 0;
@@ -370,12 +374,11 @@ PRIORITY_CHECK:
 						}
 						//自動予約禁止
 						$event = new DBRecord( PROGRAM_TBL, 'id', $program_id );
-						if( (int)$event->key_id!==0 && (int)$event->key_id!==$autorec && DBRecord::countRecords( KEYWORD_TBL, 'WHERE id = '.$event->key_id )!==0 )
+						if( (int)$event->key_id!==0 && (int)$event->key_id!==$autorec && DBRecord::countRecords( KEYWORD_TBL, 'WHERE id='.$event->key_id )!==0 )
 							goto LOG_THROW;
 						$event->key_id = $autorec;
 						$event->update();
-						reclog( '<a href="programTable.php?keyword_id='.$autorec.'">自動キーワードID:'.$autorec.
-								' </a>にヒットした'.$crec->channel_disc.'-Ch'.$crec->channel.
+						reclog( autoid_button($autorec).'にヒットした'.$crec->channel_disc.'-Ch'.$crec->channel.
 								' <a href="index.php?type='.$crec->type.'&length='.$settings->program_length.'&time='.date( 'YmdH', toTimestamp( $starttime ) ).'">'.$starttime.
 								'</a>『'.htmlspecialchars($title).'』は重複により予約できません', EPGREC_WARN );
 LOG_THROW:;
@@ -538,7 +541,7 @@ LOG_THROW:;
 												// いったん予約取り消し
 												self::cancel( $prev_id );
 												// 再予約
-												self::at_set( 
+												$rval = self::at_set( 
 													$prev_start_time,			// 開始時間Datetime型
 													$prev_end_time,				// 終了時間Datetime型
 													$prev_channel_id,			// チャンネルID
@@ -557,7 +560,22 @@ LOG_THROW:;
 													);
 											}
 											catch( Exception $e ) {
+												if( $prev_autorec == 0 ){
+													// 手動予約のトラコン設定削除
+													$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+													foreach( $tran_ex as $tran_set )
+														$tran_set->delete();
+												}
 												throw new Exception( '予約できません' );
+											}
+											if( $prev_autorec == 0 ){
+												// 手動予約のトラコン設定の予約ID修正
+												list( , , $rec_id, ) = explode( ':', $rval );
+												$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+												foreach( $tran_ex as $tran_set ){
+													$tran_set->type_no = $rec_id;
+													$tran_set->update();
+												}
 											}
 											continue;
 										}
@@ -570,7 +588,7 @@ LOG_THROW:;
 												// いったん予約取り消し
 												self::cancel( $prev_id );
 												// 再予約
-												self::at_set( 
+												$rval = self::at_set( 
 													$prev_start_time,			// 開始時間Datetime型
 													$prev_end_time,				// 終了時間Datetime型
 													$prev_channel_id,			// チャンネルID
@@ -589,7 +607,22 @@ LOG_THROW:;
 													);
 											}
 											catch( Exception $e ) {
+												if( $prev_autorec == 0 ){
+													// 手動予約のトラコン設定削除
+													$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+													foreach( $tran_ex as $tran_set )
+														$tran_set->delete();
+												}
 												throw new Exception( '予約できません' );
+											}
+											if( $prev_autorec == 0 ){
+												// 手動予約のトラコン設定の予約ID修正
+												list( , , $rec_id, ) = explode( ':', $rval );
+												$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+												foreach( $tran_ex as $tran_set ){
+													$tran_set->type_no = $rec_id;
+													$tran_set->update();
+												}
 											}
 											continue;
 										}
@@ -607,7 +640,7 @@ LOG_THROW:;
 										// いったん予約取り消し
 										self::cancel( $prev_id );
 										// 再予約
-										self::at_set( 
+										$rval = self::at_set( 
 											$prev_start_time,			// 開始時間Datetime型
 											$prev_end_time,				// 終了時間Datetime型
 											$prev_channel_id,			// チャンネルID
@@ -626,7 +659,22 @@ LOG_THROW:;
 											);
 									}
 									catch( Exception $e ) {
+										if( $prev_autorec == 0 ){
+											// 手動予約のトラコン設定削除
+											$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+											foreach( $tran_ex as $tran_set )
+												$tran_set->delete();
+										}
 										throw new Exception( 'チューナ機種の変更に失敗' );
+									}
+									if( $prev_autorec == 0 ){
+										// 手動予約のトラコン設定の予約ID修正
+										list( , , $rec_id, ) = explode( ':', $rval );
+										$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$prev_id );
+										foreach( $tran_ex as $tran_set ){
+											$tran_set->type_no = $rec_id;
+											$tran_set->update();
+										}
 									}
 								}
 							}else
@@ -641,10 +689,11 @@ LOG_THROW:;
 										if( $ps !== FALSE ){
 											exec( RECPT1_CTL.' --pid '.$ps->pid.' --extend -'.($ed_tm_sft+$extra_time) );
 											for( $i=0; $i<count($prev_trecs) ; $i++ ){
-												if( $prev_id === (int)$prev_trecs[$i]->id ){
-													$prev_trecs[$i]->endtime        = toDatetime( $prev_end_time - $ed_tm_sft );
-													$prev_trecs[$i]->prev_shortened = TRUE;
-													$prev_trecs[$i]->update();
+												if( $prev_id === (int)$prev_trecs[$i]['id'] ){
+													$wrt_set = array();
+													$wrt_set['endtime']   = toDatetime( $prev_end_time - $ed_tm_sft );
+													$wrt_set['shortened'] = TRUE;
+													$res_obj->force_update( $prev_trecs[$i]['id'], $wrt_set );
 													break;
 												}
 											}
@@ -657,10 +706,11 @@ LOG_THROW:;
 										if( $ps !== FALSE ){
 											exec( RECPT1_CTL.' --pid '.$ps->pid.' --extend '.($ed_tm_sft+$extra_time) );
 											for( $i=0; $i<count($prev_trecs) ; $i++ ){
-												if( $prev_id === (int)$prev_trecs[$i]->id ){
-													$prev_trecs[$i]->endtime        = toDatetime( $prev_end_time + $ed_tm_sft );
-													$prev_trecs[$i]->prev_shortened = FALSE;
-													$prev_trecs[$i]->update();
+												if( $prev_id === (int)$prev_trecs[$i]['id'] ){
+													$wrt_set = array();
+													$wrt_set['endtime']   = toDatetime( $prev_end_time + $ed_tm_sft );
+													$wrt_set['shortened'] = FALSE;
+													$res_obj->force_update( $prev_trecs[$i]['id'], $wrt_set );
 													break;
 												}
 											}
@@ -820,7 +870,7 @@ LOG_THROW:;
 		}
 		if( $program_id ){
 			$prg = new DBRecord( PROGRAM_TBL, 'id', $program_id );
-			$resolution = (int)$prg->video_type & 0xF0;
+			$resolution = (int)(($prg->video_type & 0xF0) >> 4 );
 			$aspect     = (int)$prg->video_type & 0x0F;
 			$audio_type = (int)$prg->audio_type;
 			$bilingual  = (int)$prg->multi_type;
@@ -862,13 +912,9 @@ LOG_THROW:;
 			// %DURATIONHMS%	録画時間（hh:mm:ss）
 */
 			$day_of_week = array( '日','月','火','水','木','金','土' );
-			$filename = $autorec&&$keyword->filename_format!="" ? $keyword->filename_format : $settings->filename_format;
+			$filename = $autorec&&$keyword->filename_format!='' ? $keyword->filename_format : $settings->filename_format;
 
-			$temp = trim($title);
-			if( strncmp( $temp, '[￥]', 5 ) == 0 ){
-				$out_title = substr( $temp, 5 );
-			}else
-				$out_title = $temp;
+			$out_title = trim($title);
 			// %TITLE%
 			$filename = mb_str_replace('%TITLE%', $out_title, $filename);
 			// %TITLEn%	番組タイトル(n=1-9 1枠の複数タイトルから選別変換 '/'でセパレートされているものとする)
@@ -880,7 +926,7 @@ LOG_THROW:;
 						$split_tls = explode( '/', $out_title );
 						$filename  = mb_str_replace( '%TITLE'.$tl_num.'%', $split_tls[(int)$tl_num-1], $filename );
 					}else
-						$filename = mb_str_replace( '%TITLE'.$tl_num.'%', $out_title.$tl_num, $filename );
+						$filename = mb_str_replace( '%TITLE'.$tl_num.'%', $out_title, $filename );
 				}
 			}
 			// %TL_SBn%	タイトル+複数話分割(n=1-n 1枠の複数サブタイトルから選別変換)
@@ -912,6 +958,13 @@ LOG_THROW:;
 			$filename = mb_str_replace('%SID%',$crec_->sid, $filename );
 			// %CH%	チャンネル番号
 			$filename = mb_str_replace('%CH%',$crec_->channel, $filename );
+			// %CH2%	チャンネル番号(その2) %TYPE%が不要になる
+			$filename = mb_str_replace('%CH2%',$crec_->channel_disc, $filename );
+			// %CH3%	チャンネル番号(その3) マルチチャンネルが無い場合はこちらが良いかも
+			if( strpos( $filename, '%CH3%' ) !== FALSE ){
+				$ch_num   = $crec_->type==='GR' ? $crec_->channel : $crec_->sid;
+				$filename = mb_str_replace('%CH3%',$ch_num, $filename );
+			}
 			// %CHNAME%	チャンネル名
 			$filename = mb_str_replace('%CHNAME%',$crec_->name, $filename );
 			// %DOW%	曜日（Sun-Mon）
@@ -942,11 +995,13 @@ LOG_THROW:;
 			}
 
 			if( defined( 'KATAUNA' ) ){
-				// しょぼかるからサブタイトル取得(スケジュール未登録)
+				// しょぼかるからサブタイトル取得(しょぼかるのスケジュール未登録分用)
+				// 注意:epgdumpの非公開関数でEPG番組名が"タイトル #nn「」"の形に正規化されているのを前提としているのでここを有効にするだけでは恩恵はまったくない
+				//      またこの処理を予約する際に必ず動くような使い方をすると「しょぼいカレンダー」に迷惑なのでやらないように(これは一括処理から漏れたものの最後の足掻き処理です)
 				if( $category_id==8 && strpos( $filename, '「」' )!==FALSE ){
 					$title_piece = explode( ' #', $filename );		// タイトル分離
 					$trans       = str_replace( ' ', '', $title_piece[0] );
-					if( ( $handle = fopen( INSTALL_PATH.'/settings/Title_base.csv', "r+") ) !== FALSE ){
+					if( ( $handle = fopen( INSTALL_PATH.'/settings/Title_base.csv', 'r+') ) !== FALSE ){
 						do{
 							// タイトルリスト1行読み込み
 							if( ( $data = fgetcsv( $handle ) ) === FALSE ){
@@ -955,12 +1010,12 @@ LOG_THROW:;
 								while(1){
 									$find_ps = file_get_contents( 'http://cal.syoboi.jp/find?sd=0&r=0&v=0&kw='.urlencode($search_nm) );		// エンコードは変わるかも
 									if( $find_ps !== FALSE ){
-										if( strpos( $find_ps, "href=\"/tid/" ) !== FALSE ){
+										if( strpos( $find_ps, 'href="/tid/' ) !== FALSE ){
 											list( $dust_trim, $dust ) = explode( '外部サイトの検索結果', $find_ps );
-											$tl_list = explode( "href=\"/tid/", $dust_trim );
+											$tl_list = explode( 'href="/tid/', $dust_trim );
 											for( $loop=1; $loop<count($tl_list); $loop++ ){
-												if( strpos( $tl_list[$loop], "\">".$search_nm.'</a>' ) !== FALSE ){
-													list( $tid, ) = explode( "\">", $tl_list[$loop] );
+												if( strpos( $tl_list[$loop], '">'.$search_nm.'</a>' ) !== FALSE ){
+													list( $tid, ) = explode( '">', $tl_list[$loop] );
 													$data = array( (int)$tid, 1, $title_piece[0], $trans, str_replace( '・', '', $trans ) );
 													fputcsv( $handle, $data );
 													break 2;
@@ -985,6 +1040,7 @@ LOG_THROW:;
 									case 20:	// 児童
 									case 21:	// 非視聴
 									case 22:	// 海外
+									case 23:	// SD非視聴
 										$num = count( $data );
 										for( $loop=2; $loop<$num; $loop++ ){
 											if( $loop === 2 ){
@@ -1011,7 +1067,7 @@ LOG_THROW:;
 														if( strpos( $sub_piece.'」', '「」' ) !== FALSE ){
 															$scount = (int)$sub_piece;							// 強引？
 															if( $scount <= $st_count ){
-																$num_cmp = sprintf( "%d*", $scount );
+																$num_cmp = sprintf( '%d*', $scount );
 																if( strpos( $st_list[$scount-1], $num_cmp ) !== FALSE ){
 																	if( $scount === $st_count ){
 																		list( $subsplit, $dust ) = explode( '</SubTitles>', $st_list[$scount-1] );
@@ -1042,21 +1098,21 @@ LOG_THROW:;
 //			$filename = preg_replace("/[ \.\/\*:<>\?\\|()\'\"&]/u","_", trim($filename) );
 			
 			// 全角に変換したい場合に使用
-/*			$trans = array( "[" => "［",
-							"]" => "］",
-							"/" => "／",
-							"'" => "’",
-							"\"" => "”",
-							"\\" => "￥",
+/*			$trans = array( '[' => '［',
+							']' => '］',
+							'/' => '／',
+							'\'' => '’',
+							'"' => '”',
+							'\\' => '￥',
 						);
 			$filename = strtr( $filename, $trans );
 */
 			// UTF-8に対応できない環境があるようなのでmb_ereg_replaceに戻す
 //			$filename = mb_ereg_replace("[ \./\*:<>\?\\|()\'\"&]","_", trim($filename) );
-			$filename = mb_ereg_replace("[\\/\'\"]","_", trim($filename) );
+			$filename = mb_ereg_replace( "[\\/\'\"]", '_', trim($filename) );
 
 			// ディレクトリ付加
-			$add_dir = $autorec && $keyword->directory!="" ? $keyword->directory.'/' : "";
+			$add_dir = $autorec && $keyword->directory!='' ? $keyword->directory.'/' : '';
 
 			// 文字コード変換
 			if( defined( 'FILESYSTEM_ENCODING' ) ) {
@@ -1088,7 +1144,7 @@ LOG_THROW:;
 				$files = array();
 			$file_cnt = 0;
 			$tmp_name = $filename;
-			$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
+			$sql_que  = 'WHERE path LIKE \''.DBRecord::sql_escape($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix']).'\'';
 			while( in_array( $tmp_name.$RECORD_MODE["$mode"]['suffix'], $files ) || DBRecord::countRecords( RESERVE_TBL, $sql_que )!==0 ){
 				$file_cnt++;
 				$len_dec = strlen( (string)$file_cnt );
@@ -1097,7 +1153,7 @@ LOG_THROW:;
 					$fl_len   = strlen( $filename );
 				}
 				$tmp_name = $filename.$file_cnt;
-				$sql_que  = "WHERE path LIKE '".mysql_real_escape_string($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix'])."'";
+				$sql_que  = 'WHERE path LIKE \''.DBRecord::sql_escape($add_dir.$tmp_name.$RECORD_MODE["$mode"]['suffix']).'\'';
 			}
 			$filename  = $tmp_name.$RECORD_MODE["$mode"]['suffix'];
 			$thumbname = $filename.'.jpg';
@@ -1164,8 +1220,8 @@ LOG_THROW:;
 					fwrite($pipes[0], "echo 'temp' > ".$spool_path."/tmp & sync &\n" );		//HDD spin-up
 				fwrite($pipes[0], $settings->sleep.' '.$sleep_time."\n" );
 			}
-			fwrite($pipes[0], DO_RECORD." ".$rrec->id."\n" );		//$rrec->id追加は録画キャンセルのためのおまじない
-			fwrite($pipes[0], COMPLETE_CMD." ".$rrec->id."\n" );
+			fwrite($pipes[0], DO_RECORD.' '.$rrec->id."\n" );		//$rrec->id追加は録画キャンセルのためのおまじない
+			fwrite($pipes[0], COMPLETE_CMD.' '.$rrec->id."\n" );
 			if( $settings->use_thumbs == 1 ) {
 				fwrite($pipes[0], $gen_thumbnail."\n" );
 			}
@@ -1194,7 +1250,10 @@ LOG_THROW:;
 				if( is_numeric( $rarr[$key+1]) ) {
 					$rrec->job = $rarr[$key+1];
 					$rrec->update();
-					reclog( '予約ID:'.$rrec->id.' '.$rrec->channel_disc.':T'.$rrec->tuner.'-Ch'.$rrec->channel.' '.$rrec->starttime.'『'.$title.'』を登録' );
+					$put_msg = '[予約ID:'.$rrec->id.' 登録] '.$rrec->channel_disc.'(T'.$rrec->tuner.'-'.$rrec->channel.') '.$rrec->starttime.' 『'.$title.'』';
+					if( $autorec )
+						$put_msg = autoid_button( $autorec ).htmlspecialchars( $put_msg );
+					reclog( $put_msg );
 					return $program_id.':'.$tuner.':'.$rrec->id;			// 成功
 				}
 			}
@@ -1219,25 +1278,27 @@ LOG_THROW:;
 		$settings = Settings::factory();
 		$rec = null;
 		try {
+			$rev_obj = new DBRecord( RESERVE_TBL );
 			if( $reserve_id ) {
-				$rec = new DBRecord( RESERVE_TBL, 'id' , $reserve_id );
+				$prev_recs = $rev_obj->fetch_array( 'id', $reserve_id );
+				$rec = $prev_recs[0];
 				$ret = '0';
 			}
 			else if( $program_id ) {
-				$prev_recs = DBRecord::createRecords( RESERVE_TBL, "WHERE complete = '0' AND program_id = '".$program_id."' ORDER BY starttime ASC" );
+				$prev_recs = $rev_obj->fetch_array( 'program_id', $program_id, 'complete=0 ORDER BY starttime ASC' );
 				$rec = $prev_recs[0];
 				$ret = (string)(count( $prev_recs ) - 1);
 			}
 			if( $rec == null ) {
 				throw new Exception('IDの指定が無効です');
 			}
-			if( ! $rec->complete ) {
+			if( ! $rec['complete'] ){
 				// 予約解除
-				$rec_st = toTimestamp($rec->starttime);
+				$rec_st = toTimestamp($rec['starttime']);
 				$pad_tm = $rec_st%60 ? PADDING_TIME+60-$rec_st%60 : PADDING_TIME;
 				$rec_at = $rec_st - $pad_tm;
 				$rec_st -= $settings->former_time;
-				$rec_ed = toTimestamp($rec->endtime);
+				$rec_ed = toTimestamp($rec['endtime']);
 				$now_tm = time();
 				if( $rec_at-2 <= $now_tm ){
 					if( $rec_st-2 <= $now_tm ){
@@ -1246,13 +1307,13 @@ LOG_THROW:;
 							if( $rec_st >= $now_tm )
 								sleep(3);
 							//録画停止
-							$ps = search_reccmd( $rec->id );
+							$ps = search_reccmd( $rec['id'] );
 							if( $ps !== FALSE ){
-								$rec->autorec = ( $rec->autorec + 1 ) * -1;
-								$rec->update();
-								$smf_type = $rec->type=='CS' ? 'BS' : $rec->type;
+								$wrt_set['autorec'] = ( $rec['autorec'] + 1 ) * -1;
+								$rev_obj->force_update( $rec['id'], $wrt_set );
+								$smf_type = $rec['type']==='CS' ? 'BS' : $rec['type'];
 								if( ( $smf_type!=='EX' &&
-										( ( USE_RECPT1 && $rec->tuner<TUNER_UNIT1 ) || ( $rec->tuner>=TUNER_UNIT1 && $OTHER_TUNERS_CHARA["$smf_type"][$prev_tuner-TUNER_UNIT1]['cntrl'] ) ) )
+										( ( USE_RECPT1 && $rec['tuner']<TUNER_UNIT1 ) || ( $rec['tuner']>=TUNER_UNIT1 && $OTHER_TUNERS_CHARA["$smf_type"][$prev_tuner-TUNER_UNIT1]['cntrl'] ) ) )
 										|| ( $smf_type==='EX' && $EX_TUNERS_CHARA[$prev_tuner]['cntrl'] ) ){
 									// recpt1ctlで停止
 									exec( RECPT1_CTL.' --pid '.$ps->pid.' --time 10 >/dev/null' );
@@ -1262,16 +1323,22 @@ LOG_THROW:;
 								}
 								return $ret;
 							}
+						}else{
+							//AT削除
+							if( at_clean( $rec, $settings, TRUE ) === 2 ){
+								// 別ユーザーでAT登録
+								return $ret;
+							}
 						}
 						//DB残留 DB削除へ
 					}else{
 						if( $rec_at >= $now_tm )
 							sleep(3);
 						//sleep待機中の予約解除
-						$sleep_ppid  = (int)trim( file_get_contents( '/tmp/tuner_'.$rec->type.$rec->tuner ) );
+						$sleep_ppid  = (int)trim( file_get_contents( '/tmp/tuner_'.$rec['type'].$rec['tuner'] ) );
 						$ps_output   = shell_exec( PS_CMD );
 						$rarr        = explode( "\n", $ps_output );
-						$scout_cmd   = INSTALL_PATH.'/scoutEpg.php '.$rec->id;
+						$scout_cmd   = INSTALL_PATH.'/scoutEpg.php '.$rec['id'];
 						$my_pid      = posix_getpid();
 						$sleep_pid   = 0;
 						$scout_pid   = 0;
@@ -1296,7 +1363,7 @@ LOG_THROW:;
 								if( strpos( $rarr[$cc], $scout_cmd ) !== FALSE ){
 									$ps = ps_tok( $rarr[$cc] );
 									$scout_pid = (int)$ps->pid;
-									$temp_ts   = $settings->temp_data.'_'.$rec->type.'_'.$scout_pid;
+									$temp_ts   = $settings->temp_data.'_'.$rec['type'].'_'.$scout_pid;
 									$stop_stk++;
 								}
 							}else
@@ -1329,39 +1396,21 @@ LOG_THROW:;
 							}
 						}
 						if( $stop_stk ){
-							reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'『'.$rec->title.'』を削除' );
-							$rec->delete();
+							reclog( '[予約ID:'.$rec['id'].' 削除] '.$rec['channel_disc'].'(T'.$rec['tuner'].'-'.$rec['channel'].') '.$rec['starttime'].' 『'.$rec['title'].'』' );
+							$rev_obj->force_delete( $rec['id'] );
 							return $ret;
 						}
 						throw new Exception( '予約キャンセルに失敗した' );
 					}
 				}else{
 					//AT削除
-					while(1){
-						$ret_cd = system( $settings->atrm . " " . $rec->job, $var_ret );
-						if( $ret_cd!==FALSE && $var_ret==0 ){
-							reclog( '予約ID:'.$rec->id.' '.$rec->channel_disc.':T'.$rec->tuner.'-Ch'.$rec->channel.' '.$rec->starttime.'『'.$rec->title.'』を削除' );
-							break;
-						}
-						$rarr       = explode( "\n", str_replace( "\t", ' ', shell_exec( $settings->at.'q' ) ) );
-						$search_job = $rec->job.' ';
-						$search_own = posix_getlogin();
-						foreach( $rarr as $str_var ){
-							if( strncmp( $str_var, $search_job, strlen( $search_job ) ) == 0 ){
-								if( strpos( $str_var, $search_own ) !== FALSE )
-									continue 2;
-								else{
-									reclog( '予約ID:'.$rec->id.'の削除を中止しました。 AT-JOB:'.$rec->job.'の削除に失敗しました。 ('.$search_own.'以外でJOBが登録されている)', EPGREC_ERROR );
-									return $ret;
-								}
-							}
-						}
-						reclog( '予約ID:'.$rec->id.'を削除しましたが AT-JOB:'.$rec->job.'の削除に失敗しました。 (JOBが有りませんでした)' );
-						break;
+					if( at_clean( $rec, $settings, TRUE ) === 2 ){
+						// 別ユーザーでAT登録
+						return $ret;
 					}
 				}
 			}
-			$rec->delete();
+			$rev_obj->force_delete( $rec['id'] );
 			return $ret;
 		}
 		catch( Exception $e ) {

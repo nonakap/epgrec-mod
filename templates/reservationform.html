@@ -16,7 +16,8 @@
         <input type="text" size="2" name="ehour" id="id_ehour" value="{$ehour}">時
         <input type="text" size="2" name="emin" id="id_emin" value="{$emin}">分
         <input type="text" size="2" name="esec" id="id_esec" value="{$esec}">秒
-    </div>
+        <input type="checkbox" name="discontinuity" id="id_discontinuity" value="1"{$discontinuity}>隣接禁止
+   </div>
 <div>
 <span class="labelLeft">録画モード</span>
 	<select name="record_mode" id="id_record_mode">
@@ -24,7 +25,7 @@
           <option value="{$smarty.section.mode.index}"{if $smarty.section.mode.index==$autorec_mode} selected{/if}>{$record_mode[mode].name}</option>
         {/section}
         </select>
- 隣接禁止<input type="checkbox" name="discontinuity" id="id_discontinuity" value="1"{$discontinuity}>
+ 元ファイル削除<input type="checkbox" name="ts_del" id="id_ts_del" value="1">
  優先度<input type="text" size="2" name="priority" id="id_priority" value="{$priority}">
  番組ID保持<input type="checkbox" name="program_id" id="id_program_id" value="{$program_id}" checked="checked"></div>
 <div>

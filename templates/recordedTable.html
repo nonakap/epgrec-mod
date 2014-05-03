@@ -121,21 +121,23 @@ table#reservation_table td {
     text-align: center;
 }
 
-table#reservation_table tr.ctg_news, #category_select a.ctg_news {background-color: #FFFFD8;}
-table#reservation_table tr.ctg_etc, #category_select a.ctg_etc {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_information, #category_select a.ctg_information {background-color: #F2D8FF;}
-table#reservation_table tr.ctg_sports, #category_select a.ctg_sports {background-color: #D8FFFF;}
-table#reservation_table tr.ctg_cinema, #category_select a.ctg_cinema {background-color: #FFD8D8;}
-table#reservation_table tr.ctg_music, #category_select a.ctg_music {background-color: #D8D8FF;}
-table#reservation_table tr.ctg_drama, #category_select a.ctg_drama {background-color: #D8FFD8;}
-table#reservation_table tr.ctg_anime, #category_select a.ctg_anime {background-color: #FFE4C8;}
-table#reservation_table tr.ctg_variety, #category_select a.ctg_variety {background-color: #FFD2EB;}
-table#reservation_table tr.ctg_documentary, #category_select a.ctg_documentary {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_stage, #category_select a.ctg_stage {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_hobby, #category_select a.ctg_hobby {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_welfare, #category_select a.ctg_welfare {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_expand, #category_select a.ctg_expand {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #E4F4F4;}
+table#reservation_table tr.ctg_1,  #category_select a.ctg_1  {background-color: #FFFFD8;}	/* NEWS */
+table#reservation_table tr.ctg_2,  #category_select a.ctg_2  {background-color: #D8FFFF;}	/* SPORTS */
+table#reservation_table tr.ctg_3,  #category_select a.ctg_3  {background-color: #F2D8FF;}	/* INFORMATION */
+table#reservation_table tr.ctg_4,  #category_select a.ctg_4  {background-color: #D8FFD8;}	/* DRAMA */
+table#reservation_table tr.ctg_5,  #category_select a.ctg_5  {background-color: #D8D8FF;}	/* MUSIC */
+table#reservation_table tr.ctg_6,  #category_select a.ctg_6  {background-color: #FFD2EB;}	/* VARIETY */
+table#reservation_table tr.ctg_7,  #category_select a.ctg_7  {background-color: #FFD8D8;}	/* CINEMA */
+table#reservation_table tr.ctg_8,  #category_select a.ctg_8  {background-color: #FFE4C8;}	/* ANIME */
+table#reservation_table tr.ctg_9,  #category_select a.ctg_9  {background-color: #FFFFFF;}	/* DOCUMENTARY */
+table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #FFFFFF;}	/* STAGE */
+table#reservation_table tr.ctg_11, #category_select a.ctg_11 {background-color: #FFFFFF;}	/* HOBBY */
+table#reservation_table tr.ctg_12, #category_select a.ctg_12 {background-color: #FFFFFF;}	/* WELFARE */
+table#reservation_table tr.ctg_13, #category_select a.ctg_13 {background-color: #FFFFFF;}	/* RESERVE1 */
+table#reservation_table tr.ctg_14, #category_select a.ctg_14 {background-color: #FFFFFF;}	/* RESERVE2 */
+table#reservation_table tr.ctg_15, #category_select a.ctg_15 {background-color: #FFFFFF;}	/* EXPAND */
+table#reservation_table tr.ctg_16, #category_select a.ctg_16 {background-color: #FFFFFF;}	/* ETC */
+table#reservation_table tr.ctg_aa, #category_select a.ctg_aa {background-color: #E4F4F4;}	/*  */
 
 
 #floatBox4Dialog .prg_title{font-size:120%;font-weight:bold;padding:0.4em 0;text-align:center;}
@@ -164,33 +166,46 @@ table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: 
 
 
 <div>
-絞り込み：
+<fieldset>
+<legend><b>絞り込み</b></legend>
 <form method="post" action="recordedTable.php" >
 <input type="hidden" name="do_search" value="1">
-検索語句<input type="text" name="search" value="{$search|escape}" class="example1"><br>
+検索語句<input type="text" name="search" value="{$search|escape}" class="example1" title="ワイルドカードは'%'・半角スペースは'_'です。 NOT検索は語彙冒頭に'-'を付加してください。"><br>
 局<select name="station">
   {foreach from=$stations item=st}
-    <option value="{$st.id}" {$st.selected}>{$st.name}</option>
+    <option value="{$st.id}" {$st.selected}>{$st.name}{if $st.count}({$st.count}){/if}</option>
   {/foreach}
   </select>
 ジャンル<select name="category_id">
   {foreach from=$cats item=cat}
-  <option value="{$cat.id}" {$cat.selected}>{$cat.name}</option>
+    <option value="{$cat.id}" {$cat.selected}>{$cat.name}{if $cat.count}({$cat.count}){/if}</option>
   {/foreach}
   </select>
 <input type="submit" value="絞り込む">
 </form>
+</fieldset>
 </div>
 
-タイトルをクリックすると視聴できます（ブラウザの設定でASFとVLCを関連付けている必要があります）
 {if count($records)}
+{if $pager != ''}{$pager}{/if}
+<form method="post" action="recordedTable.php" >
+<input type="hidden" name="do_delete" value="1">
+{if $key_id===false}
+  <input type="hidden" name="do_search" value="1">
+  <input type="hidden" name="search" value="{$search}">
+  <input type="hidden" name="station" value="{$station}">
+  <input type="hidden" name="category_id" value="{$category_id}">
+  <input type="hidden" name="full_mode" value="{$full_mode}">
+{else}
+  <input type="hidden" name="key_id" value="{$key_id}">
+{/if}
 <table id="reservation_table">
  <tr>
   <th>№</th>
   <th>録画日時</th>
   <th>録画時間</th>
   <th>局名</th>
-  <th>モード</th>
+   <th>モード<br>(視聴)</th>
   {if $use_thumbs == 1}<th>サムネール</th>{/if}
   <th>タイトル</th>
   <th>概要</th>
@@ -201,20 +216,27 @@ table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: 
 
 {foreach from=$records name=loop item=rec }
  <tr id="resid_{$rec.id}" class="ctg_{$rec.cat}">
-  <td style="text-align: center;"><a {if $rec.keyword != ""}href="{$rec.keyword}"{/if}>{$smarty.foreach.loop.iteration}</a></td>
+  <td style="text-align: center;"><a {if $rec.keyword != ""}href="{$rec.keyword}" title="この番組を条件にして番組検索にジャンプ"{/if}>{$smarty.foreach.loop.iteration}</a></td>
   <td style="white-space: nowrap;">{$rec.starttime}</td>
   <td style="white-space: nowrap;">{$rec.duration}</td>
   <td>{$rec.station_name}</td>
-  <td>{$rec.mode}</td>
+  <td>{$rec.view_set}</td>
   {if $use_thumbs == 1}<td><a href="{$rec.asf}">{$rec.thumb}</a></td>{/if}
-  <td style="text-align: left;"><a href="{$rec.asf}" id="tid_{$rec.id}">{$rec.title}</a></td>
+  <td style="text-align: left;"><a id="tid_{$rec.id}">{$rec.title}</a></td>
   <td style="text-align: left;"><a id="did_{$rec.id}">{$rec.description}</a></td>
-  <td style="text-align: right;">{if !$rec.key_id }□{else}<a href="programTable.php?keyword_id={$rec.key_id}">{$rec.key_id}</a>{/if}</td>
+  <td>{if !$rec.key_id }□{else}<a href="programTable.php?keyword_id={$rec.key_id}" title="自動キーワード編集にジャンプ">{$rec.key_id}</a>{/if}<br><input type="button" value="絞込" onClick="location.href='recordedTable.php?key={$rec.key_id}'" title="自動キーワードIDで絞り込み"></td>
   <td><input type="button" value="変更" onClick="javascript:PRG.editdialog('{$rec.id}')"></td>
-  <td><input type="button" value="削除" onClick="javascript:PRG.dialog('{$rec.id}','{$rec.title}')"></td>
+  <td><input type="checkbox" name="del{$rec.id}" value="1" title="一括削除用"><br><input type="button" value="削除" onClick="javascript:PRG.dialog('{$rec.id}','{$rec.title}')"></td>
  </tr>
 {/foreach}
 </table>
+<div style="text-align: right;">
+<b><input type="checkbox" name="delall" value="1">絞り込み全削除</b>
+<b><input type="checkbox" name="delrec" value="1">録画ファイル削除</b>
+<b><input type="submit" value="一括削除"></b>
+</div>
+</form>
+{if $pager != ""}{$pager}{/if}
 
 {else}
   現在、録画済データはありません

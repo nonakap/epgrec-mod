@@ -128,21 +128,23 @@ table#reservation_table td {
     border-width: 0 0 1px 1px;
 }
 
-table#reservation_table tr.ctg_news, #category_select a.ctg_news {background-color: #FFFFD8;}
-table#reservation_table tr.ctg_etc, #category_select a.ctg_etc {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_information, #category_select a.ctg_information {background-color: #F2D8FF;}
-table#reservation_table tr.ctg_sports, #category_select a.ctg_sports {background-color: #D8FFFF;}
-table#reservation_table tr.ctg_cinema, #category_select a.ctg_cinema {background-color: #FFD8D8;}
-table#reservation_table tr.ctg_music, #category_select a.ctg_music {background-color: #D8D8FF;}
-table#reservation_table tr.ctg_drama, #category_select a.ctg_drama {background-color: #D8FFD8;}
-table#reservation_table tr.ctg_anime, #category_select a.ctg_anime {background-color: #FFE4C8;}
-table#reservation_table tr.ctg_variety, #category_select a.ctg_variety {background-color: #FFD2EB;}
-table#reservation_table tr.ctg_documentary, #category_select a.ctg_documentary {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_stage, #category_select a.ctg_stage {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_hobby, #category_select a.ctg_hobby {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_welfare, #category_select a.ctg_welfare {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_expand, #category_select a.ctg_expand {background-color: #FFFFFF;}
-table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #E4F4F4;}
+table#reservation_table tr.ctg_1,  #category_select a.ctg_1  {background-color: #FFFFD8;}	/* NEWS */
+table#reservation_table tr.ctg_2,  #category_select a.ctg_2  {background-color: #D8FFFF;}	/* SPORTS */
+table#reservation_table tr.ctg_3,  #category_select a.ctg_3  {background-color: #F2D8FF;}	/* INFORMATION */
+table#reservation_table tr.ctg_4,  #category_select a.ctg_4  {background-color: #D8FFD8;}	/* DRAMA */
+table#reservation_table tr.ctg_5,  #category_select a.ctg_5  {background-color: #D8D8FF;}	/* MUSIC */
+table#reservation_table tr.ctg_6,  #category_select a.ctg_6  {background-color: #FFD2EB;}	/* VARIETY */
+table#reservation_table tr.ctg_7,  #category_select a.ctg_7  {background-color: #FFD8D8;}	/* CINEMA */
+table#reservation_table tr.ctg_8,  #category_select a.ctg_8  {background-color: #FFE4C8;}	/* ANIME */
+table#reservation_table tr.ctg_9,  #category_select a.ctg_9  {background-color: #FFFFFF;}	/* DOCUMENTARY */
+table#reservation_table tr.ctg_10, #category_select a.ctg_10 {background-color: #FFFFFF;}	/* STAGE */
+table#reservation_table tr.ctg_11, #category_select a.ctg_11 {background-color: #FFFFFF;}	/* HOBBY */
+table#reservation_table tr.ctg_12, #category_select a.ctg_12 {background-color: #FFFFFF;}	/* WELFARE */
+table#reservation_table tr.ctg_13, #category_select a.ctg_13 {background-color: #FFFFFF;}	/* RESERVE1 */
+table#reservation_table tr.ctg_14, #category_select a.ctg_14 {background-color: #FFFFFF;}	/* RESERVE2 */
+table#reservation_table tr.ctg_15, #category_select a.ctg_15 {background-color: #FFFFFF;}	/* EXPAND */
+table#reservation_table tr.ctg_16, #category_select a.ctg_16 {background-color: #FFFFFF;}	/* ETC */
+table#reservation_table tr.ctg_aa, #category_select a.ctg_aa {background-color: #E4F4F4;}	/*  */
 
 table#reservation_table td.tuner0 {border: solid thick red; border-collapse: separate;}
 table#reservation_table td.tuner1 {border: solid thick green; border-collapse: separate;}
@@ -174,6 +176,7 @@ table#reservation_table td.tuner3 {border: solid thick yellow; border-collapse: 
 </form></h2>
 
 {if $ts_rate }<div><div style="text-align: right;">録画ストレージ残容量 {$free_size}GB  およそ{$free_time}分({$ts_rate}MB/min)</div></div>{/if}
+{if $pager != ''}{$pager}{/if}
 
 {if count($reservations)}
 <table id="reservation_table">
@@ -193,20 +196,21 @@ table#reservation_table td.tuner3 {border: solid thick yellow; border-collapse: 
 
 {foreach from=$reservations item=reserve}
  <tr id="resid_{$reserve.id}" class="ctg_{$reserve.cat}">
-  <td style="text-align: center;"><a {if $reserve.keyword != ""}href="{$reserve.keyword}"{/if}>{$reserve.id}</a></td>
+  <td style="text-align: center;"><a {if $reserve.keyword != ""}href="{$reserve.keyword}" title="この番組を条件にして番組検索にジャンプ"{/if}>{$reserve.id}</a></td>
   <td class="tuner{$reserve.tuner}" style="text-align: center;{if $reserve.type != "GR"}background-color: #FF6000;{/if}">{$reserve.type}{$reserve.tuner}</td>
   <td id="chid_{$reserve.id}" style="text-align: center;">{$reserve.channel_name}</td>
-  <td style="text-align: center;white-space: nowrap;"><a href="index.php?type={$reserve.type}&length=8&time={$reserve.prg_top}">{$reserve.date}</a></td>
-  <td id="stid_{$reserve.id}">{$reserve.starttime}{$reserve.endtime}<br>　　({$reserve.duration})</td>
-  <td style="text-align: center;">{$reserve.mode}</td>
+  <td style="text-align: center;white-space: nowrap;"><a href="index.php?type={$reserve.type}&length=8&time={$reserve.prg_top}" title="EPG番組表へジャンプ">{$reserve.date}</a></td>
+  <td id="stid_{$reserve.id}" style="text-align: center;">{$reserve.starttime}{$reserve.endtime}<br>({$reserve.duration})</td>
+  <td style="text-align: center; white-space: pre;">{$reserve.mode}</td>
   <td id="tid_{$reserve.id}">{$reserve.title|escape}</td>
   <td id="did_{$reserve.id}">{$reserve.description|escape}</td>
-  <td style="text-align: right;">{if $reserve.autorec != "□"}<a href="programTable.php?keyword_id={$reserve.autorec}">{/if}{$reserve.autorec}</a></td>
+  <td style="text-align: right;">{if $reserve.autorec != "□"}<a href="programTable.php?keyword_id={$reserve.autorec}" title="自動キーワード編集にジャンプ">{/if}{$reserve.autorec}</a></td>
   <td style="padding: 0;"><input type="button" value="編集" onClick="javascript:PRG.editdialog('{$reserve.id}')"></td>
   <td style="padding: 0;"><input type="button" value="削除" onClick="javascript:PRG.cancelform('{$reserve.id}')"></td>
  </tr>
 {/foreach}
 </table>
+{if $pager != ''}{$pager}{/if}
 {else}
   現在、予約はありません
 {/if}

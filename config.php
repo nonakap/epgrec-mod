@@ -57,10 +57,10 @@ $RECORD_MODE = array(
 		'name' => 'Full TS',	// モードの表示名
 		'suffix' => '_fl.ts',	// ファイル名のサフィックス
 	),
-	
+	// ※ 1は必須で、変更不可です。
 	1 => array(
-		'name' => 'HD TS',	// 最小のTS
-		'suffix' => '.ts',	// do-record.shのカスタマイズが必要
+		'name' => 'HD TS',	// 最小構成のTS
+		'suffix' => '.ts',
 	),
 	
 	2 => array(
@@ -145,6 +145,14 @@ define( "EXTINCT_CH_AUTO_DELETE", FALSE );			// 廃止チャンネルを自動�
 define( 'CRITERION_CHECK', FALSE );					// 収録時間変動
 define( 'REST_ALERT', FALSE );						// 番組がヒットしない場合
 
+// 表示関連設定
+define( 'SEPARATE_RECORDS', 50 );					// 1ページ中の表示レコード数・0指定でページ化無効(共通)
+define( 'VIEW_OVERLOAD', 0 );						// 1ページ表示での上限を指定数上乗せする(共通)
+define( 'SEPARATE_RECORDS_RESERVE', FALSE );		// 1ページ中の表示レコード数・0指定でページ化無効・FALSEは共通を使用(予約一覧用)
+define( 'VIEW_OVERLOAD_RESERVE', FALSE );			// 1ページ表示での上限を指定数上乗せする・FALSEは共通を使用(予約一覧用)
+define( 'SEPARATE_RECORDS_RECORDED', FALSE );		// 1ページ中の表示レコード数・0指定でページ化無効・FALSEは共通を使用(録画済一覧用)
+define( 'VIEW_OVERLOAD_RECORDED', FALSE );			// 1ページ表示での上限を指定数上乗せする・FALSEは共通を使用(録画済一覧用)
+
 // セキュリティ関連
 define( "SETTING_CHANGE_GIP", FALSE );				// グローバルIPからの設定変更を許可する場合はTRUE
 //////////////////////////////////////////////////////////////////////////////
@@ -183,7 +191,7 @@ define( "TS_STREAM_RATE", 110 );					// １分あたりのTSサイズ(MB・ス�
 
 define( "PT1_REBOOT", FALSE );							// PT1が不安定なときにリブートするかどうか
 define( "REBOOT_CMD", 'sudo /sbin/shutdown -r now' );	// リブートコマンド
-//define( 'REBOOT_CMD', 'sudo '.INSTALL_PATH.'/driver_reset.sh' );	// pt1ドライバー再読込み こっちにする場合は、modprobeをHTTPDから使えるようにして
+//define( 'REBOOT_CMD', INSTALL_PATH.'/driver_reset.sh' );	// pt1ドライバー再読込み こっちにする場合は、modprobeをHTTPDから使えるようにして
 define( 'REBOOT_COMMENT', 'PT2 is out of order: SYSTEM REBOOT ' );
 
 // BS/CSでEPGを取得するチャンネル
@@ -203,8 +211,9 @@ define( 'PROGRAM_TBL',  'programTbl' );						// 番組表
 define( 'CHANNEL_TBL',  'channelTbl' );						// チャンネルテーブル
 define( 'CATEGORY_TBL', 'categoryTbl' );					// カテゴリテーブル
 define( 'KEYWORD_TBL', 'keywordTbl' );						// キーワードテーブル
-// ログテーブル
-define( 'LOG_TBL', 'logTbl' );
+define( 'LOG_TBL', 'logTbl' );								// ログテーブル
+define( 'TRANSCODE_TBL', 'transcodeTbl' );					// トランスコードテーブル
+define( 'TRANSEXPAND_TBL', 'transexpandTbl' );					// トランスコード拡張設定テーブル
 
 // 全国用BSデジタルチャンネルマップ
 check_ch_map( 'bs_channel.php' );
@@ -227,23 +236,54 @@ if( check_ch_map( 'gr_channel.php', isset( $GR_CHANNEL_MAP ) ) ){
 	include_once( INSTALL_PATH.'/settings/gr_channel.php' );
 }
 
+// トランスコード設定
+if( file_exists( INSTALL_PATH.'/settings/trans_config.php' ) ){
+	include_once( INSTALL_PATH.'/settings/trans_config.php' );
+
+	$RECORD_MODE = array_merge( $RECORD_MODE, $TRANS_MODE );
+}
+
 
 // セキュリティ強化
 if( isset($_SERVER['REMOTE_ADDR']) ){
-	if( $_SERVER['REMOTE_ADDR'] === '127.0.0.1' ){
-		$NET_AREA = 'H';			// local host
-	}else
-	if( strncmp( $_SERVER['REMOTE_ADDR'], '192.168.', 8 ) === 0 ){
-		$NET_AREA = 'C';			// class C
-	}else
-	if( strncmp($_SERVER['REMOTE_ADDR'], '10.', 3 ) === 0 ){
-		$NET_AREA = 'A';			// class A
+	$check_addr = strtolower( $_SERVER['REMOTE_ADDR'] );
+	if( strpos( $check_addr, ':' ) !== FALSE )
+		if( strpos( $check_addr, '.' ) !== FALSE ){		// IPv4射影アドレス/IPv4互換アドレス チェック
+			$check_addr = str_replace( (!strncmp( $check_addr, '::ffff:', 7 ) ? '::ffff:' : '::'), '', $check_addr );
+			$ipv4 = TRUE;
+		}else
+			$ipv4 = FALSE;
+	else
+		$ipv4 = TRUE;
+	if( $ipv4 ){
+		// IPv4
+		if( $check_addr === '127.0.0.1' ){
+			$NET_AREA = 'H';			// local host(loop back)
+		}else
+		if( strncmp( $check_addr, '192.168.', 8 ) === 0 ){
+			$NET_AREA = 'C';			// class C
+		}else
+		if( strncmp($check_addr, '10.', 3 ) === 0 ){
+			$NET_AREA = 'A';			// class A
+		}else{
+			$adrs = explode( '.', $check_addr );
+			if( $adrs[0]==='172' && ((int)$adrs[1]&0xf0)==0x10 )
+				$NET_AREA = 'B';			// class B
+			else
+				$NET_AREA = 'G';			// global
+		}
 	}else{
-		$adrs = explode( '.', $_SERVER['REMOTE_ADDR'] );
-		if( $adrs[0]==='172' && ((int)$adrs[1]&0xf0)==0x10 )
-			$NET_AREA = 'B';			// class B
-		else
-			$NET_AREA = 'G';			// blobal
+		// IPv6
+		if( $check_addr === '::1' ){
+			$NET_AREA = 'H';			// local host(loop back)
+		}else{
+			list( $adrstr, ) = explode( ':', $check_addr );
+			$adrs            = hexdec( $adrstr );
+			if( $adrs&0xFE00===0xFC00 || $adrs&0xFFC0===0xFE80 )
+				$NET_AREA = 'P';			// private(ユニークローカルユニキャストアドレス/リンクローカルユニキャストアドレス)
+			else
+				$NET_AREA = 'G';			// global
+		}
 	}
 }else
 	$NET_AREA = FALSE;

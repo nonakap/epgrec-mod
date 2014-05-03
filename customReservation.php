@@ -73,5 +73,16 @@ try{
 catch( Exception $e ) {
 	exit( "Error:".$e->getMessage() );
 }
+if( isset( $RECORD_MODE[$mode]['tsuffix'] ) ){
+	// 手動予約のトラコン設定
+	list( , , $rec_id, ) = explode( ':', $rval );
+	$tex_obj = new DBRecord( TRANSEXPAND_TBL );
+	$tex_obj->key_id  = 0;
+	$tex_obj->type_no = $rec_id;
+	$tex_obj->mode    = $mode;
+	$tex_obj->ts_del  = isset($_POST['ts_del']) ? $_POST['ts_del'] : 0;
+	$tex_obj->dir     = '';
+	$tex_obj->update();
+}
 exit( $rval );
 ?>

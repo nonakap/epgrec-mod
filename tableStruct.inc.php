@@ -27,14 +27,12 @@ define( "RESERVE_STRUCT",
 	"overlap boolean not null default '1',".							// ダーティフラグ
 	"dirty boolean not null default '0',".							// ダーティフラグ
 	"discontinuity boolean not null default '0',".					// 隣接録画禁止フラグ 禁止なら1
-	"index reserve_chid_idx (channel_id),".							// インデックス
-	"index reserve_ch_idx (channel_disc),".
-	"index reserve_st_idx (starttime),".
-	"index reserve_ed_idx (endtime),".
-	"index reserve_pri_idx (priority),".
-	"index reserve_pid_idx (program_id),".
-	"index reserve_cmp_idx (complete),".
-	"index reserve_type_idx (type)".
+	"index reserve_chid_idx (channel_id,complete,starttime),".							// インデックス
+	"index reserve_pid_idx (program_id,complete,starttime),".
+	"index reserve_pri_idx (program_id,priority),".
+	"index reserve_type_idx (type,complete,starttime),".
+	"index reserve_cmp_idx (complete,starttime),".
+	"index reserve_auto_idx (autorec,complete)".
 	""
 );
 
@@ -63,16 +61,12 @@ define( "PROGRAM_STRUCT",
 	"program_disc varchar(128) not null default 'none',".	 		// 識別用hash
 	"autorec boolean not null default '1',".						// 自動録画有効無効
 	"key_id integer not null default '0',".							// 自動予約禁止フラグをたてた自動キーワードID
-	"index program_chid_idx (channel_id),".							// インデックス
+	"index program_chid_idx (channel_id,eid),".						// インデックス
 	"index program_chdisc_idx (channel_disc),".
-	"index program_st_idx (starttime),".
+	"index program_st_idx (channel_id,starttime),".
 	"index program_ed_idx (endtime),".
 	"index program_disc_idx (program_disc),".
-	"index program_eid_idx (eid),".
-	"index program_cat_idx (category_id,sub_genre),".
-	"index program_title_idx (title),".
-	"index program_desc_idx (description),".
-	"index program_type_idx (type)".
+	"index program_cat_idx (channel_id,category_id,sub_genre)".
 	""
 );
 
@@ -85,6 +79,10 @@ define( "CHANNEL_STRUCT",
 	"channel_disc varchar(128) not null default 'none',".			// 識別用hash
 	"sid varchar(64) not null default 'hd',".						// サービスID用02/23/2010追加
 	"skip boolean not null default '0'".							// チャンネルスキップ用03/13/2010追加
+	",index channel_type_idx (type)".
+	",index channel_skip_idx (skip,type,id)".
+	",index channel_disc_idx (channel_disc,type)".
+	",index channel_ch_idx (channel)".
 	""
 );
 
@@ -98,7 +96,7 @@ define( "CATEGORY_STRUCT",
 
 define( "KEYWORD_STRUCT",
 	"id integer not null auto_increment primary key,".				// ID
-	"keyword varchar(512) not null default '*',".					// 表示名
+	"keyword varchar(512) not null default '*',".					// 検索語彙
 	"kw_enable boolean not null default '1',".						// 有効・無効フラグ
 	"typeGR boolean not null default '1',".							// 地デジフラグ
 	"typeBS boolean not null default '1',".							// BSフラグ
@@ -108,6 +106,7 @@ define( "KEYWORD_STRUCT",
 	"category_id integer not null default '0',".					// カテゴリ(ジャンル)ID
 	"sub_genre integer not null default '16',".						// サブジャンルID
 	"use_regexp boolean not null default '0',".						// 正規表現を使用するなら1
+	"collate_ci boolean not null default '0',".						// 全半角同一視するなら1
 	"ena_title boolean not null default '1',".						// タイトル検索対象フラグ
 	"ena_desc boolean not null default '1',".						// 概要検索対象フラグ
 	"autorec_mode integer not null default '0',".					// 自動録画のモード02/23/2010追加
@@ -134,6 +133,34 @@ define( "LOG_STRUCT",
 	",logtime  datetime not null default '1970-01-01 00:00:00'".	// 記録日時
 	",level integer not null default '0'".							// エラーレベル
 	",message varchar(512) not null default ''".
+	",index log_level_idx (level)".
+	""
+);
+
+define( "TRANSCODE_STRUCT",
+	"id integer not null auto_increment primary key".				// ID
+	",rec_id  integer not null default '0'".						// 予約ID
+	",rec_endtime datetime not null default '1970-01-01 00:00:00'".	// 録画終了時刻(順番判別用)
+	",enc_starttime datetime not null default '1970-01-01 00:00:00'".	// エンコード開始時刻
+	",enc_endtime datetime not null default '1970-01-01 00:00:00'".	// エンコード終了時刻
+	",mode integer not null default '0'".							// 変換モード(変換時のみ有効・事後に基本設定が変更される可能性があるので)
+	",name char(16) not null default ''".							// 表示名(変換開始時に記入)
+	",status integer not null default '0'".							// 状態(0:変換開始待ち 1:変換中 2:変換完了 3:変換失敗)
+	",ts_del boolean not null default '0'".							// 元ファイル削除フラグ
+	",path blob default null".										// 変換ファイルフルパス
+	",index log_recid_idx (rec_id,status)".
+	",index log_status_idx (status,rec_endtime,rec_id)".
+	""
+);
+
+define( "TRANSEXPAND_STRUCT",
+	"id integer not null auto_increment primary key".				// ID
+	",key_id integer not null default '0'".							// 自動ID(0のときは手動予約)
+	",type_no integer not null default '0'".						// 識別子No(手動予約のときは予約ID)
+	",mode integer not null default '0'".							// 変換モード
+	",ts_del boolean not null default '0'".							// 元ファイル削除フラグ
+	",dir blob default null".										// フルパス
+	",index log_status_idx (key_id,type_no)".
 	""
 );
 

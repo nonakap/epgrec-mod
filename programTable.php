@@ -8,8 +8,6 @@ include_once( INSTALL_PATH . '/settings/menu_list.php' );
 
 $settings = Settings::factory();
 
-$options = " WHERE starttime > '".date('Y-m-d H:i:s', time() + 200 )."'";
-
 // 曜日
 $weekofdays = array(
 					array( 'name' => '月', 'value' => 0, 'checked' => '' ),
@@ -33,6 +31,7 @@ $search = '';
 $use_regexp = 0;
 $ena_title  = FALSE;
 $ena_desc   = FALSE;
+$collate_ci = FALSE;
 $typeGR      = TRUE;
 $typeBS      = TRUE;
 $typeCS      = TRUE;
@@ -57,27 +56,97 @@ $criterion_dura = 0;
 $criterion_enab = CRITERION_CHECK;
 $rest_alert     = REST_ALERT;
 $smart_repeat   = FALSE;
+$trans_set      = '';
+
+try{
+	$stations  = array();
+	$chid_list = array();
+	$stations[0]['id']       = $chid_list[0] = 0;
+	$stations[0]['name']     = 'すべて';
+	$stations[0]['type']     = 'ALL';
+	$stations[0]['selected'] = '';
+	$crecs = DBRecord::createRecords( CHANNEL_TBL, 'WHERE type=\'GR\' AND skip=0 ORDER BY id' );
+	foreach( $crecs as $c ) {
+		$arr = array();
+		$arr['id']       = $chid_list[] = (int)$c->id;
+		$arr['name']     = $c->name;
+		$arr['type']     = 'GR';
+		$arr['selected'] = '';
+		array_push( $stations, $arr );
+	}
+	$crecs = DBRecord::createRecords( CHANNEL_TBL, 'WHERE type=\'BS\' AND skip=0 ORDER BY sid' );
+	foreach( $crecs as $c ) {
+		$arr = array();
+		$arr['id']       = $chid_list[] = (int)$c->id;
+		$arr['name']     = $c->name;
+		$arr['type']     = 'BS';
+		$arr['selected'] = '';
+		array_push( $stations, $arr );
+	}
+	$crecs = DBRecord::createRecords( CHANNEL_TBL, 'WHERE type=\'CS\' AND skip=0 ORDER BY sid' );
+	foreach( $crecs as $c ) {
+		$arr = array();
+		$arr['id']       = $chid_list[] = (int)$c->id;
+		$arr['name']     = $c->name;
+		$arr['type']     = 'CS';
+		$arr['selected'] = '';
+		array_push( $stations, $arr );
+	}
+	$crecs = DBRecord::createRecords( CHANNEL_TBL, 'WHERE type=\'EX\' AND skip=0 ORDER BY sid' );
+	foreach( $crecs as $c ) {
+		$arr = array();
+		$arr['id']       = $chid_list[] = (int)$c->id;
+		$arr['name']     = $c->name;
+		$arr['type']     = 'EX';
+		$arr['selected'] = '';
+		array_push( $stations, $arr );
+	}
+//	$chid_list = array_column( $stations, 'id' );		// PHP5.5
+}catch( exception $e ) {
+	exit( $e->getMessage() );
+}
 
 // パラメータの処理
 if(isset( $_POST['do_search'] )) {
 	if( isset($_POST['search']) ){
-		$search     = $_POST['search'];
-		$use_regexp = isset($_POST['use_regexp']);
-		$ena_title  = isset($_POST['ena_title']);
-		$ena_desc   = isset($_POST['ena_desc']);
+		$search = trim($_POST['search']);
+		if( $search != '' ){
+			$use_regexp = isset($_POST['use_regexp']);
+			if( !$use_regexp )
+				$collate_ci = isset($_POST['collate_ci']);
+			$ena_title  = isset($_POST['ena_title']);
+			$ena_desc   = isset($_POST['ena_desc']);
+		}
 	}
-	$typeGR = isset($_POST['typeGR']);
-	$typeBS = isset($_POST['typeBS']);
-	$typeCS = isset($_POST['typeCS']);
-	$typeEX = isset($_POST['typeEX']);
+	if( isset($_POST['station']) )
+		$channel_id = (int)($_POST['station']);
+	if( $channel_id ){
+		switch( $stations[array_search( $channel_id, $chid_list )]['type'] ){
+			case 'GR':
+				$typeBS = $typeCS = $typeEX = FALSE;
+				break;
+			case 'BS':
+				$typeGR = $typeCS = $typeEX = FALSE;
+				break;
+			case 'CS':
+				$typeGR = $typeBS = $typeEX = FALSE;
+				break;
+			case 'EX':
+				$typeGR = $typeBS = $typeCS = FALSE;
+				break;
+		}
+	}else{
+		$typeGR = isset($_POST['typeGR']);
+		$typeBS = isset($_POST['typeBS']);
+		$typeCS = isset($_POST['typeCS']);
+		$typeEX = isset($_POST['typeEX']);
+	}
 	if( isset($_POST['category_id']) ){
 		$category_id = (int)($_POST['category_id']);
 		$first_genre = !isset($_POST['first_genre']);
 		if( isset($_POST['sub_genre']) )
 			$sub_genre = (int)($_POST['sub_genre']);
 	}
-	if( isset($_POST['station']) )
-		$channel_id = (int)($_POST['station']);
 	if( isset($_POST['week0']) )
 		$weekofday += 0x1;
 	if( isset($_POST['week1']) )
@@ -129,7 +198,7 @@ if(isset( $_POST['do_search'] )) {
 }else{
 	if( isset($_GET['keyword_id']) ) {
 		$keyword_id    = (int)($_GET['keyword_id']);
-		if( DBRecord::countRecords( KEYWORD_TBL, "WHERE id = '".$keyword_id."'" ) == 0 ){
+		if( DBRecord::countRecords( KEYWORD_TBL, 'WHERE id='.$keyword_id ) == 0 ){
 			echo '<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body onLoad="history.back()"></body></html>';
 			exit( 1 );
 		}
@@ -138,6 +207,7 @@ if(isset( $_POST['do_search'] )) {
 		$use_regexp    = (int)($keyc->use_regexp);
 		$ena_title     = (boolean)$keyc->ena_title;
 		$ena_desc      = (boolean)$keyc->ena_desc;
+		$collate_ci    = (boolean)$keyc->collate_ci;
 		$kw_enable     = (boolean)$keyc->kw_enable;
 		$typeGR        = (boolean)$keyc->typeGR;
 		$typeBS        = (boolean)$keyc->typeBS;
@@ -165,25 +235,45 @@ if(isset( $_POST['do_search'] )) {
 		$do_keyword = 1;
 	}else{
 		if( isset($_GET['search'])){
-			$search = $_GET['search'];
-			if( isset($_GET['use_regexp']) && ($_GET['use_regexp']) ) {
-				$use_regexp = (int)($_GET['use_regexp']);
+			$search = trim($_GET['search']);
+			if( $search != '' ){
+				if( isset($_GET['use_regexp']) && ($_GET['use_regexp']) ) {
+					$use_regexp = (int)($_GET['use_regexp']);
+				}
+				if( !$use_regexp && isset($_GET['collate_ci']) )
+					$collate_ci = (boolean)$_GET['collate_ci'];
+				if( isset($_GET['ena_title'])){
+					$ena_title = (boolean)$_GET['ena_title'];
+				}else
+					$ena_title = TRUE;
+				if( isset($_GET['ena_desc'])){
+					$ena_desc = (boolean)$_GET['ena_desc'];
+				}else
+					$ena_desc = FALSE;
+				$do_keyword = 1;
 			}
-			if( isset($_GET['ena_title'])){
-				$ena_title = (boolean)$_GET['ena_title'];
-			}else
-				$ena_title = TRUE;
-			if( isset($_GET['ena_desc'])){
-				$ena_desc = (boolean)$_GET['ena_desc'];
-			}else
-				$ena_desc = FALSE;
-			$do_keyword = 1;
 		}
 		if( isset($_GET['station'])) {
 			$channel_id = (int)($_GET['station']);
-			$do_keyword = 1;
+			if( $channel_id ){
+				switch( $stations[array_search( $channel_id, $chid_list )]['type'] ){
+					case 'GR':
+						$typeBS = $typeCS = $typeEX = FALSE;
+						break;
+					case 'BS':
+						$typeGR = $typeCS = $typeEX = FALSE;
+						break;
+					case 'CS':
+						$typeGR = $typeBS = $typeEX = FALSE;
+						break;
+					case 'EX':
+						$typeGR = $typeBS = $typeCS = FALSE;
+						break;
+				}
+				$do_keyword = 1;
+			}
 		}
-		if( isset($_GET['type'])) {
+		if( !$channel_id && isset($_GET['type'])) {
 			switch( $_GET['type'] ){
 				case 'GR';
 					$typeBS = FALSE;
@@ -218,7 +308,8 @@ if(isset( $_POST['do_search'] )) {
 	}
 }
 
-$autorec_modes[$autorec_mode]['selected'] = 'selected';
+$id_selected                        = array_search( $channel_id, $chid_list );
+$stations[$id_selected]['selected'] = 'selected';
 
 if( !$typeGR && !$typeBS && !$typeCS && !$typeEX ){
 	$typeGR = TRUE;
@@ -240,15 +331,13 @@ if( $weekofday == 0 )
 try{
 	$programs = array();
 if( $do_keyword ){
-	$precs = Keyword::search( $search, $use_regexp, $ena_title, $ena_desc, $typeGR, $typeBS, $typeCS, $typeEX, $category_id, $channel_id, $weekofday, $prgtime, $period, $sub_genre, $first_genre );
+	$precs = Keyword::search( $search, $use_regexp, $collate_ci, $ena_title, $ena_desc, $typeGR, $typeBS, $typeCS, $typeEX, $category_id, $channel_id, $weekofday, $prgtime, $period, $sub_genre, $first_genre );
 	
-	foreach( $precs as $p ) {
+	foreach( $precs as $p ){
 	try{
-		$ch  = new DBRecord(CHANNEL_TBL, 'id', $p->channel_id );
-		$cat = new DBRecord(CATEGORY_TBL, 'id', $p->category_id );
 		$arr = array();
 		$arr['type'] = $p->type;
-		$arr['station_name'] = $ch->name;
+		$arr['station_name'] = $stations[array_search( (int)$p->channel_id, $chid_list )]['name'];
 		$start_time = toTimestamp($p->starttime);
 		$end_time = toTimestamp($p->endtime);
 		$duration = $end_time - $start_time;
@@ -262,11 +351,11 @@ if( $do_keyword ){
 		$arr['title'] = $p->title;
 		$arr['description'] = $p->description;
 		$arr['id']  = $p->id;
-		$arr['cat'] = $cat->name_en;
-		$rec_cnt    = DBRecord::countRecords(RESERVE_TBL, "WHERE program_id = '".$p->id."' AND complete = '0'");
+		$arr['cat'] = $p->category_id;
+		$rev        = DBRecord::createRecords(RESERVE_TBL, 'WHERE program_id='.$p->id.' AND complete=0 ORDER BY starttime ASC');
+		$rec_cnt    =  count( $rev );
 		if( $rec_cnt ){
 			$arr['excl'] = $rec_cnt>1 ? 1 : 0;
-			$rev = DBRecord::createRecords(RESERVE_TBL, "WHERE program_id = '".$p->id."' AND complete = '0' ORDER BY starttime ASC");
 			if( $keyword_id ){
 				foreach( $rev as $r ){
 					if( (int)$r->autorec == $keyword_id ){
@@ -303,6 +392,9 @@ EXIT_REV:;
 	}catch( exception $e ){}
 	}
 }
+	if( $criterion_dura===0 && $criterion_enab )
+		$criterion_dura = 1;
+
 	$k_category_name = '';
 	$crecs = DBRecord::createRecords(CATEGORY_TBL);
 	$cats = array();
@@ -372,42 +464,7 @@ EXIT_REV:;
 			$arr['checked'] =  '';
 		array_push( $types, $arr );
 	}
-	
-	$k_station_name = '';
-	$stations = array();
-	$stations[0]['id'] = 0;
-	$stations[0]['name'] = 'すべて';
-	$stations[0]['selected'] = (! $channel_id) ? 'selected' : '';
-	$crecs = DBRecord::createRecords( CHANNEL_TBL, "WHERE type = 'GR' AND skip = '0' ORDER BY id" );
-	foreach( $crecs as $c ) {
-		$arr = array();
-		$arr['id'] = $c->id;
-		$arr['name'] = $c->name;
-		$arr['type'] = 'GR';
-		$arr['selected'] = $channel_id == $c->id ? 'selected' : '';
-		if( $channel_id == $c->id ) $k_station_name = $c->name;
-		array_push( $stations, $arr );
-	}
-	$crecs = DBRecord::createRecords( CHANNEL_TBL, "WHERE type = 'BS' AND skip = '0' ORDER BY sid" );
-	foreach( $crecs as $c ) {
-		$arr = array();
-		$arr['id'] = $c->id;
-		$arr['name'] = $c->name;
-		$arr['type'] = 'BS';
-		$arr['selected'] = $channel_id == $c->id ? 'selected' : '';
-		if( $channel_id == $c->id ) $k_station_name = $c->name;
-		array_push( $stations, $arr );
-	}
-	$crecs = DBRecord::createRecords( CHANNEL_TBL, "WHERE type = 'CS' AND skip = '0' ORDER BY sid" );
-	foreach( $crecs as $c ) {
-		$arr = array();
-		$arr['id'] = $c->id;
-		$arr['name'] = $c->name;
-		$arr['type'] = 'CS';
-		$arr['selected'] = $channel_id == $c->id ? 'selected' : '';
-		if( $channel_id == $c->id ) $k_station_name = $c->name;
-		array_push( $stations, $arr );
-	}
+
 	$wds_name = '';
 	for( $b_cnt=0; $b_cnt<7; $b_cnt++ ){
 		if( $weekofday & ( 0x01 << $b_cnt ) ){
@@ -434,6 +491,53 @@ EXIT_REV:;
 		);
 	}
 
+	// ディレクトリ
+	$dir_collection = get_directrys( INSTALL_PATH.$settings->spool );
+
+	// トランスコード設定
+	if( array_key_exists( 'tsuffix', end($autorec_modes) ) ){
+		if( $keyword_id ){
+			$trans_obj = new DBRecord( TRANSEXPAND_TBL );
+			$trans_ex  = $trans_obj->fetch_array( null, null, 'key_id='.$keyword_id.' ORDER BY type_no' );
+		}else
+			$trans_ex  = array();
+		for( $loop=count($trans_ex); $loop<TRANS_SET_KEYWD; $loop++ ){
+			$arr = array();
+			$arr['mode']   = 0;
+			$arr['ts_del'] = FALSE;
+			$arr['dir']    = '';
+			$trans_ex[]    = $arr;
+		}
+
+		$trans_path = str_replace( '%VIDEO%', INSTALL_PATH.'/video', TRANS_ROOT );
+		$path_html  = htmlspecialchars( $trans_path, ENT_QUOTES );
+		$tsdel      = FALSE;
+		$trans_set  = '<fieldset><legend><b>トランスコード設定</b></legend>';
+		foreach( $trans_ex as $key => $trans_unit ){
+			$trans_set .= '<b>設定'.($key+1).':</b> <b>モード</b><select name="k_trans_mode'.$key.'" >';
+			$trans_set .= '<option value="0"'.( $trans_unit['mode']===0 ? ' selected ':'' ).'>未指定</option>';
+			foreach( $autorec_modes as $loop => $mode ){
+				if( isset($mode['tsuffix']) )
+					$trans_set .= '<option value="'.$loop.'"'.( (int)$trans_unit['mode']===$loop ? ' selected ':'' ).'>'.$mode['name'].'</option>';
+			}
+			$trans_set .= '</select> <b>保存ディレクトリー </b>'.$path_html.
+					'/<input type="text" name="k_transdir'.$key.'" value="'.htmlspecialchars($trans_unit['dir'],ENT_QUOTES).'" size="80" class="required" list="trans_ex"><br>';
+			if( $trans_unit['ts_del'] )
+				$tsdel = TRUE;
+		}
+		$trans_set .= '<datalist id="trans_ex">'.get_directrys( $trans_path ).'</datalist>';
+		$trans_set .= '<input type="checkbox" name="k_auto_del" value="1" '.($tsdel ? 'checked="checked"' : '').'><b>元ファイルの自動削除</b></fieldset>';
+	}
+
+	// 録画設定一覧からトランスコード設定を削除
+	foreach( $autorec_modes as $loop => $mode ){
+		if( isset($mode['tsuffix']) && $autorec_mode<$loop ){
+			array_splice( $autorec_modes, $loop );
+			break;
+		}
+	}
+	$autorec_modes[$autorec_mode]['selected'] = 'selected';
+
 	$link_add = '';
 	if( (int)$settings->gr_tuners > 0 )
 		$link_add .= '<option value="index.php">地上デジタル番組表</option>';
@@ -450,7 +554,7 @@ EXIT_REV:;
 	$smarty->assign('sitetitle', !$keyword_id ? '番組検索' : '自動録画キーワード編集 №'.$keyword_id );
 	$smarty->assign( 'link_add', $link_add );
 	$smarty->assign( 'menu_list', $MENU_LIST );
-	$smarty->assign('do_keyword', $do_keyword );
+	$smarty->assign( 'do_keyword', $do_keyword );
 	$smarty->assign( 'programs', $programs );
 	$smarty->assign( 'cats', $cats );
 	$smarty->assign( 'k_category', $category_id );
@@ -469,9 +573,10 @@ EXIT_REV:;
 	$smarty->assign( 'use_regexp', $use_regexp );
 	$smarty->assign( 'ena_title', $ena_title );
 	$smarty->assign( 'ena_desc', $ena_desc );
+	$smarty->assign( 'collate_ci', $collate_ci );
 	$smarty->assign( 'stations', $stations );
 	$smarty->assign( 'k_station', $channel_id );
-	$smarty->assign( 'k_station_name', $k_station_name );
+	$smarty->assign( 'k_station_name', $stations[$id_selected]['name'] );
 	$smarty->assign( 'weekofday', $weekofday );
 	$smarty->assign( 'wds_name', $wds_name );
 	$smarty->assign( 'weekofdays', $weekofdays );
@@ -489,10 +594,12 @@ EXIT_REV:;
 	$smarty->assign( 'filename', $filename );
 	$smarty->assign( 'spool', $spool );
 	$smarty->assign( 'directory', $directory );
+	$smarty->assign( 'dir_collection', $dir_collection );
 	$smarty->assign( 'criterion_dura', $criterion_dura );
 	$smarty->assign( 'criterion_enab', $criterion_enab );
 	$smarty->assign( 'rest_alert', $rest_alert );
 	$smarty->assign( 'smart_repeat', $smart_repeat );
+	$smarty->assign( 'trans_set', $trans_set );
 	$smarty->display('programTable.html');
 }
 catch( exception $e ) {

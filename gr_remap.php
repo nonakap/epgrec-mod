@@ -43,6 +43,7 @@
 					if( $num > 0 ){
 						$revs = DBRecord::createRecords( RESERVE_TBL , $sql_cmd.' ORDER BY priority DESC' );
 						foreach( $revs as $rev ){
+							$pre_id        = $rev->id;
 							$starttime     = $rev->starttime;
 							$endtime       = $rev->endtime;
 							$channel_id    = $rev->channel_id;
@@ -53,7 +54,7 @@
 							$mode          = $rev->mode;
 							$discontinuity = $rev->discontinuity;
 							$priority      = $rev->priority;
-							Reservation::cancel( $rev->id );
+							Reservation::cancel( $pre_id );
 							try{
 								$rval = Reservation::custom(
 											$starttime,
@@ -69,8 +70,19 @@
 											0,
 											$priority
 								);
+								// 手動予約のトラコン設定の予約ID修正
+								list( , , $rec_id, ) = explode( ':', $rval );
+								$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$pre_id );
+								foreach( $tran_ex as $tran_set ){
+									$tran_set->type_no = $rec_id;
+									$tran_set->update();
+								}
 							}
 							catch( Exception $e ) {
+								// 手動予約のトラコン設定削除
+								$tran_ex = DBRecord::createRecords( TRANSEXPAND_TBL, 'WHERE key_id=0 AND type_no='.$pre_id );
+								foreach( $tran_ex as $tran_set )
+									$tran_set->delete();
 								reclog( "Error:".$e->getMessage() );
 							}
 						}

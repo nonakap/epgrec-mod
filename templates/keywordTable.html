@@ -118,9 +118,9 @@ table#reservation_table tr.freeze {background-color: #CCCCCC;}
  </tr>
 
 {foreach from=$keywords name=loop item=keyword}
- <tr id="keyid_{$keyword.id}" onMouseover="this.style.border='4px solid red'" onMouseout="this.style.border=''" class="{if !$keyword.k_type}freeze{/if}">
-  <td><a href="programTable.php?keyword_id={$keyword.id}">{$smarty.foreach.loop.iteration}</a></td>
-  <td><a href="recordedTable.php?key={$keyword.id}">{$keyword.id}</a></td>
+ <tr id="keyid_{$keyword.id}" onMouseover="this.style.border='2px solid red'" onMouseout="this.style.border=''" class="{if !$keyword.k_type}freeze{/if}">
+  <td><a href="programTable.php?keyword_id={$keyword.id}" title="自動録画キーワード編集">{$smarty.foreach.loop.iteration}</a></td>
+  <td><a href="recordedTable.php?key={$keyword.id}" title="自動キーワードIDで絞り込んで録画済一覧にジャンプ">{$keyword.id}</a></td>
   <td style="text-align: left;">{$keyword.keyword|escape|truncate:300|wordwrap:100}</td>
 <!--  <td>{if $keyword.use_regexp}○{else}×{/if}</td>-->
   <td>{$keyword.options}</td>

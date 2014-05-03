@@ -325,6 +325,8 @@
 			var tmp_disc = $('#id_discontinuity').attr('checked');
 			var id_discontinuity = tmp_disc ? 1 : 0;
 			var id_priority = $('#id_priority').val();
+			tmp_disc = $('#id_ts_del').attr('checked');
+			var id_ts_del = tmp_disc ? 1 : 0;
 			
 			$.post('customReservation.php', { syear: id_syear,
 							  smonth: id_smonth,
@@ -345,7 +347,8 @@
 							  category_id: id_category_id,
 							  program_id: id_program_id,
 							  discontinuity: id_discontinuity,
-							  priority: id_priority }, function(data) {
+							  priority: id_priority,
+							  ts_del: id_ts_del }, function(data) {
 				var recv = data.match(/error/i);
 				document.getElementById("id_customrec").disabled = true;
 				if( recv != null ){

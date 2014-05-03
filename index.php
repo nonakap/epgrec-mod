@@ -9,7 +9,7 @@ include_once( INSTALL_PATH . '/settings/menu_list.php' );
 
 // 設定ファイルの有無を検査する
 if( ! file_exists( INSTALL_PATH.'/settings/config.xml') && !file_exists( '/etc/epgrecUNA/config.xml' ) ) {
-    header( "Content-Type: text/html;charset=utf-8" );
+    header( 'Content-Type: text/html;charset=utf-8' );
     exit( "<script type=\"text/javascript\">\n" .
           "<!--\n".
          "window.open(\"install/step1.php\",\"_self\");".
@@ -20,6 +20,9 @@ $settings = Settings::factory();
 
 // 現在の時間
 $now_time = time();
+
+$height_per_hour = (int)$settings->height_per_hour;
+$height_per_sec  = $height_per_hour / 3600;
 
 // パラメータの処理
 // 表示する長さ（時間）
@@ -38,7 +41,7 @@ if( isset($_GET['ch']) ){
 	$single_ch_disc = $_GET['ch'];
 	$type           = strtoupper( substr($_GET['ch'], 0, 2) );
 	// チャンネルセレクタ
-	$crec = DBRecord::createRecords( CHANNEL_TBL, "WHERE type='".$type."' AND skip=0" );
+	$crec = DBRecord::createRecords( CHANNEL_TBL, 'WHERE type=\''.$type.'\' AND skip=0' );
 	$single_ch_selects = array();
 	foreach( $crec as $val ) {
 		array_push( $single_ch_selects, array(
@@ -74,6 +77,20 @@ if( isset( $_GET['time'] ) && sscanf( $_GET['time'] , '%04d%2d%2d%2d', $y, $mon,
 	$top_time = mktime( date('H'), 0 , 0 );
 $last_time = $top_time + 3600 * $program_length;
 
+$smarty = new Smarty();
+
+// ジャンル一覧
+$genres = DBRecord::createRecords( CATEGORY_TBL );
+$cats   = array();
+$num    = 0;
+foreach( $genres as $val ) {
+	$cats[$num]['name_en'] = $val->name_en;
+	$cats[$num]['name_jp'] = $val->name_jp;
+	$num++;
+}
+$smarty->assign( 'cats', $cats );
+
+
 $st = 0;
 $prec = null;
 try {
@@ -101,100 +118,97 @@ for( $i = 0; $i < $lp_lmt; $i++ ){
 	}
 	try {
 		if( !$single_ch_disc && $type==='GR' )
-			$options = "WHERE type = 'GR' AND channel = '".$channel_map[$channel_disc]."' ORDER BY sid ASC";
+			$options = 'WHERE channel=\''.$channel_map[$channel_disc].'\' ORDER BY sid ASC';
 		else
-			$options = "WHERE channel_disc = '".$channel_disc."'";
-		$ch_cnt = DBRecord::countRecords( CHANNEL_TBL, $options );
-		if( $ch_cnt > 0 ){
-			$chd = DBRecord::createRecords( CHANNEL_TBL, $options );
-			foreach( $chd as $crec ){
-				$num_all_ch++;
-				$prev_end = $top_time + $ch_full_duration;
-				$programs[$st]['id']   = $ch_id = $crec->id;
-				$programs[$st]['skip'] = $crec->skip;
-				$programs[$st]['channel_disc'] = $crec->channel_disc;
-				$programs[$st]['station_name'] = $crec->name;
-				$programs[$st]['sid'] = $crec->sid;
-				$programs[$st]['ch_hash'] = md5($crec->channel_disc);
-				$programs[$st]['channel'] = $crec->channel;
-				$programs[$st]['list'] = array();
-				// シングルチャンネル用
-				if ( $single_ch_disc ) {
-					$single_ch      = $programs[$st]['channel'];
-					$single_ch_sid  = $programs[$st]['sid'];
-					$single_ch_name = $programs[$st]['station_name'];
-					$programs[$st]['_day']        = date('d', $ch_top_time );
-					$programs[$st]['start_time']  = date('m', $ch_top_time );
-					$programs[$st]['start_time_dw']  = date('w', $ch_top_time ).'';
-					$programs[$st]['link'] = 'index.php?type='.$type.'&time='.date( 'Ymd', $top_time + 24 * 3600 * $i) . date('H' , $top_time );
-				}
+			$options = 'WHERE channel_disc=\''.$channel_disc.'\'';
+		$chd = DBRecord::createRecords( CHANNEL_TBL, $options );
+		foreach( $chd as $crec ){
+			$num_all_ch++;
+			$prev_end = $top_time + $ch_full_duration;
+			$programs[$st]['id']   = $ch_id = $crec->id;
+			$programs[$st]['skip'] = $crec->skip;
+			$programs[$st]['channel_disc'] = $crec->channel_disc;
+			$programs[$st]['station_name'] = $crec->name;
+			$programs[$st]['sid'] = $crec->sid;
+			$programs[$st]['ch_hash'] = md5($crec->channel_disc);
+			$programs[$st]['channel'] = $crec->channel;
+			$programs[$st]['list'] = array();
+			// シングルチャンネル用
+			if ( $single_ch_disc ) {
+				$single_ch      = $programs[$st]['channel'];
+				$single_ch_sid  = $programs[$st]['sid'];
+				$single_ch_name = $programs[$st]['station_name'];
+				$programs[$st]['_day']        = date('d', $ch_top_time );
+				$programs[$st]['start_time']  = date('m', $ch_top_time );
+				$programs[$st]['start_time_dw']  = date('w', $ch_top_time ).'';
+				$programs[$st]['link'] = 'index.php?type='.$type.'&time='.date( 'Ymd', $top_time + 24 * 3600 * $i) . date('H' , $top_time );
+			}
 
-				$reca = $prec->fetch_array( 'channel_disc', $crec->channel_disc,
-				                                  "endtime > '".toDatetime($ch_top_time)."' ".
-				                                  "AND starttime < '". toDatetime($ch_last_time)."' ".
-				                                  'ORDER BY starttime ASC '
-				                               );
-				$num = 0;
-				if( count( $reca )>1 || ( count( $reca )==1 && (string)$reca[0]['title']!=='放送休止' ) ){
-					$ch_num = $wave_type.$crec->channel.'ch';
-					foreach( $reca as $prg ) {
-						// 前プログラムとの空きを調べる
-						$program_id = $prg['id'];
-						$start_str  = $prg['starttime'];
-						$start      = toTimestamp( $start_str );
-						if( $start > $prev_end ){
-							$programs[$st]['list'][$num]['category_name'] = 'none';
-							$programs[$st]['list'][$num]['genre']         = 0;
-							$programs[$st]['list'][$num]['sub_genre']     = 0;
-							$programs[$st]['list'][$num]['height']        = (int)( ($start-$prev_end) * (int)$settings->height_per_hour / 3600 );
-							$programs[$st]['list'][$num]['title'] = '';
-							$programs[$st]['list'][$num]['starttime'] = '';
-							$programs[$st]['list'][$num]['description'] = '';
-							$num++;
-						}
-						$prev_end = toTimestamp( $prg['endtime'] );
-            
-						// プログラムを埋める
-						$cat = new DBRecord( CATEGORY_TBL, 'id', $prg['category_id'] );
-						$programs[$st]['list'][$num]['category_name'] = $cat->name_en;
-						$programs[$st]['list'][$num]['genre']         = $prg['category_id'];
-						$programs[$st]['list'][$num]['sub_genre']     = $prg['sub_genre'];
-						$programs[$st]['list'][$num]['height']        =
-							(int)( ( ($prev_end>=$ch_last_time ? $ch_last_time : $prev_end) - ($start<=$ch_top_time ? $ch_top_time : $start) ) * (int)$settings->height_per_hour / 3600 );
-						$programs[$st]['list'][$num]['title']         = $prg['title'];
-						$programs[$st]['list'][$num]['starttime']     = date('H:i:s', $start );
-						$programs[$st]['list'][$num]['description']   = $prg['description'];
-						$programs[$st]['list'][$num]['prg_start']     = str_replace( '-', '/', $start_str);
-						$programs[$st]['list'][$num]['duration']      = (string)($prev_end - $start);
-						$programs[$st]['list'][$num]['channel']       = $ch_num;
-						$programs[$st]['list'][$num]['id']            = $program_id;
-						$programs[$st]['list'][$num]['autorec']       = $prg['autorec'];
-						$rec_cnt = DBRecord::countRecords(RESERVE_TBL, "WHERE complete = '0' AND program_id = '".$program_id."'" );
-						$programs[$st]['list'][$num]['rec'] = $rec_cnt;
+			$reca = $prec->fetch_array( 'channel_id', $ch_id,
+											'endtime>\''.toDatetime($ch_top_time).'\' AND starttime<\''.toDatetime($ch_last_time).'\' ORDER BY starttime ASC' );
+			$num = 0;
+			if( count( $reca )>1 || ( count( $reca )==1 && (string)$reca[0]['title']!=='放送休止' ) ){
+				$ch_num = $wave_type.$crec->channel.'ch';
+				foreach( $reca as $prg ) {
+					// 前プログラムとの空きを調べる
+					$program_id = (int)$prg['id'];
+					$start_str  = $prg['starttime'];
+					$start      = toTimestamp( $start_str );
+					if( $start > $prev_end ){
+						$programs[$st]['list'][$num]['category_name'] = 'none';
+						$programs[$st]['list'][$num]['genre']         = 0;
+						$programs[$st]['list'][$num]['sub_genre']     = 0;
+						$programs[$st]['list'][$num]['height']        = (int)( ($start-$prev_end) * $height_per_sec );
+						$programs[$st]['list'][$num]['title'] = '';
+						$programs[$st]['list'][$num]['starttime'] = '';
+						$programs[$st]['list'][$num]['description'] = '';
+						$num++;
+					}
+					$prev_end = toTimestamp( $prg['endtime'] );
+        
+					// プログラムを埋める
+					$programs[$st]['list'][$num]['category_name'] = $cats[$prg['category_id']-1]['name_en'];
+					$programs[$st]['list'][$num]['genre']         = $prg['category_id'];
+					$programs[$st]['list'][$num]['sub_genre']     = $prg['sub_genre'];
+					$programs[$st]['list'][$num]['height']        =
+						(int)( ( ($prev_end>=$ch_last_time ? $ch_last_time : $prev_end) - ($start<=$ch_top_time ? $ch_top_time : $start) ) * $height_per_sec );
+					$programs[$st]['list'][$num]['title']         = $prg['title'];
+					$programs[$st]['list'][$num]['starttime']     = date('H:i:s', $start );
+					$programs[$st]['list'][$num]['description']   = $prg['description'];
+					$programs[$st]['list'][$num]['prg_start']     = str_replace( '-', '/', $start_str);
+					$programs[$st]['list'][$num]['duration']      = (string)($prev_end - $start);
+					$programs[$st]['list'][$num]['channel']       = $ch_num;
+					$programs[$st]['list'][$num]['id']            = $program_id;
+					$programs[$st]['list'][$num]['autorec']       = $prg['autorec'];
+					if( $program_id ){
+						$rev = DBRecord::createRecords( RESERVE_TBL, 'WHERE complete=0 AND program_id='.$program_id );
+						$programs[$st]['list'][$num]['rec'] = $rec_cnt = count( $rev );
 						if( $rec_cnt ){
-							$rev = DBRecord::createRecords(RESERVE_TBL, "WHERE complete = '0' AND program_id = '".$program_id."'" );
 							$programs[$st]['list'][$num]['tuner'] = $rev[0]->tuner;
 							// 複数ある場合の対処無し
 						}else
 							$programs[$st]['list'][$num]['tuner'] = '';
-						$programs[$st]['list'][$num]['keyword'] = putProgramHtml( $prg['title'], $type, $ch_id, $prg['category_id'], $prg['sub_genre'] );
-						$num++;
+					}else{
+						$programs[$st]['list'][$num]['rec']   = 0;
+						$programs[$st]['list'][$num]['tuner'] = '';
 					}
-					if( $crec->skip==0 && $num>0 )
-						$num_ch++;
+					$programs[$st]['list'][$num]['keyword'] = putProgramHtml( $prg['title'], $type, $ch_id, $prg['category_id'], $prg['sub_genre'] );
+					$num++;
 				}
-				// 空きを埋める
-				if( $ch_last_time > $prev_end ){
-					$programs[$st]['list'][$num]['category_name'] = 'none';
-					$programs[$st]['list'][$num]['genre']         = 0;
-					$programs[$st]['list'][$num]['sub_genre']     = 0;
-					$programs[$st]['list'][$num]['height']        = (int)( ( $ch_last_time - $prev_end ) * (int)$settings->height_per_hour / 3600 );
-					$programs[$st]['list'][$num]['title'] = '';
-					$programs[$st]['list'][$num]['starttime'] = '';
-					$programs[$st]['list'][$num]['description'] = '';
-				}
-				$st++;
+				if( $crec->skip==0 && $num>0 )
+					$num_ch++;
 			}
+			// 空きを埋める
+			if( $ch_last_time > $prev_end ){
+				$programs[$st]['list'][$num]['category_name'] = 'none';
+				$programs[$st]['list'][$num]['genre']         = 0;
+				$programs[$st]['list'][$num]['sub_genre']     = 0;
+				$programs[$st]['list'][$num]['height']        = (int)( ( $ch_last_time - $prev_end ) * $height_per_sec );
+				$programs[$st]['list'][$num]['title'] = '';
+				$programs[$st]['list'][$num]['starttime'] = '';
+				$programs[$st]['list'][$num]['description'] = '';
+			}
+			$st++;
 		}
 	}
 	catch( exception $e ) {
@@ -212,20 +226,6 @@ $chs_width = $ch_set_width * $num_ch;
 // GETパラメタ
 $get_param  = $_SERVER['SCRIPT_NAME'] . '?type='.$type.'&length='.$program_length;
 $get_param2 = $single_ch_disc ? $_SERVER['SCRIPT_NAME'].'?ch='.$single_ch_disc : $get_param;
-
-$smarty = new Smarty();
-
-// カテゴリ一覧
-$crec = DBRecord::createRecords( CATEGORY_TBL );
-$cats = array();
-$num = 0;
-foreach( $crec as $val ) {
-	$cats[$num]['name_en'] = $val->name_en;
-	$cats[$num]['name_jp'] = $val->name_jp;
-	$num++;
-}
-$smarty->assign( 'cats', $cats );
-
 
 // タイプ選択
 $types = array();
@@ -318,8 +318,8 @@ $smarty->assign( 'prelink', $get_param2.'&time='.date('YmdH', $top_time - 3600 )
 $smarty->assign( 'programs', $programs );
 $smarty->assign( 'ch_set_width', (int)($settings->ch_set_width) );
 $smarty->assign( 'chs_width', $chs_width );
-$smarty->assign( 'height_per_hour', $settings->height_per_hour );
-$smarty->assign( 'height_per_min', (int)$settings->height_per_hour / 60 );
+$smarty->assign( 'height_per_hour', $height_per_hour );
+$smarty->assign( 'height_per_min', $height_per_hour / 60 );
 $smarty->assign( 'num_ch', $num_ch );
 $smarty->assign( 'num_all_ch' , $num_all_ch );
 $smarty->assign( 'single_ch', $single_ch );
@@ -332,7 +332,7 @@ $smarty->assign( '__nowDay', date('d', $now_time) );
 $smarty->assign( 'REALVIEW_HTTP', REALVIEW_HTTP ? 1 : 0 );
 
 $sitetitle = date( 'Y', $top_time ) . '年' . date( 'm', $top_time ) . '月' . date( 'd', $top_time ) . '日'. date( 'H', $top_time ) .
-              '時～'.( $type == 'GR' ? '地上' : $type ).'デジタル'.'番組表'.($single_ch_disc ? '['.$single_ch_name.']' : '');
+              '時～'.( $type == 'GR' ? '地上' : $type ).'デジタル番組表'.($single_ch_disc ? '['.$single_ch_name.']' : '');
 
 $smarty->assign('sitetitle', $sitetitle );
 
